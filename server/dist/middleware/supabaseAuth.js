@@ -1,4 +1,4 @@
-import { createSupabasePublicClient, SupabaseConfigurationError } from "../lib/supabase.js";
+import { createSupabasePublicClient, SupabaseConfigurationError, } from "../lib/supabase.js";
 export class AuthHeaderError extends Error {
     constructor(message) {
         super(message);
@@ -40,7 +40,9 @@ export async function requireSupabaseAuth(req, res, next) {
         const supabase = createSupabasePublicClient();
         const { data, error } = await supabase.auth.getUser(accessToken);
         if (error || !data.user) {
-            return res.status(401).json({ error: "Invalid or expired access token." });
+            return res
+                .status(401)
+                .json({ error: "Invalid or expired access token." });
         }
         req.supabaseAccessToken = accessToken;
         req.supabaseRefreshToken = readRefreshTokenFromRequest(req) ?? undefined;
@@ -49,7 +51,9 @@ export async function requireSupabaseAuth(req, res, next) {
     }
     catch (error) {
         if (error instanceof SupabaseConfigurationError) {
-            return res.status(500).json({ error: "Supabase authentication is not configured." });
+            return res
+                .status(500)
+                .json({ error: "Supabase authentication is not configured." });
         }
         console.error("Supabase auth middleware failed:", error);
         return res.status(500).json({ error: "Unable to authenticate request." });

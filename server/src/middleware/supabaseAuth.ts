@@ -1,6 +1,9 @@
 import type { NextFunction, Request, Response } from "express";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
-import { createSupabasePublicClient, SupabaseConfigurationError } from "../lib/supabase.js";
+import {
+  createSupabasePublicClient,
+  SupabaseConfigurationError,
+} from "../lib/supabase.js";
 
 export class AuthHeaderError extends Error {
   constructor(message: string) {
@@ -10,6 +13,7 @@ export class AuthHeaderError extends Error {
 }
 
 declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
     interface Request {
       supabaseUser?: SupabaseUser;
@@ -27,7 +31,9 @@ export function readBearerTokenFromRequest(req: Request) {
 
   const [scheme, token, ...rest] = authorization.trim().split(/\s+/);
   if (scheme?.toLowerCase() !== "bearer" || !token || rest.length > 0) {
-    throw new AuthHeaderError("Authorization header must use the Bearer scheme.");
+    throw new AuthHeaderError(
+      "Authorization header must use the Bearer scheme.",
+    );
   }
 
   return token;
@@ -42,7 +48,11 @@ export function readRefreshTokenFromRequest(req: Request) {
   return refreshToken?.trim() || null;
 }
 
-export async function requireSupabaseAuth(req: Request, res: Response, next: NextFunction) {
+export async function requireSupabaseAuth(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
   let accessToken: string | null = null;
 
   try {
@@ -64,7 +74,9 @@ export async function requireSupabaseAuth(req: Request, res: Response, next: Nex
     const { data, error } = await supabase.auth.getUser(accessToken);
 
     if (error || !data.user) {
-      return res.status(401).json({ error: "Invalid or expired access token." });
+      return res
+        .status(401)
+        .json({ error: "Invalid or expired access token." });
     }
 
     req.supabaseAccessToken = accessToken;
@@ -73,7 +85,9 @@ export async function requireSupabaseAuth(req: Request, res: Response, next: Nex
     return next();
   } catch (error) {
     if (error instanceof SupabaseConfigurationError) {
-      return res.status(500).json({ error: "Supabase authentication is not configured." });
+      return res
+        .status(500)
+        .json({ error: "Supabase authentication is not configured." });
     }
 
     console.error("Supabase auth middleware failed:", error);
