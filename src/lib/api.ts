@@ -18,7 +18,18 @@ type CVFeedback = {
   suggestions: string[];
 };
 
-type CVAnalysisResult = {
+export type CandidateProfilePayload = {
+  summary: string;
+  strengths: string[];
+  risks: string[];
+  likelySkills: string[];
+  seniority: string;
+  jobFitScore?: number;
+  jobFitVerdict?: "strong-fit" | "partial-fit" | "weak-fit";
+  jobFitSummary?: string;
+};
+
+export type CVAnalysisResult = {
   overallScore: number;
   feedback: CVFeedback[];
   insights?: {
@@ -26,6 +37,7 @@ type CVAnalysisResult = {
     risks: string[];
     nextSteps: string[];
   };
+  candidateProfile?: CandidateProfilePayload;
 };
 
 export type PresignedUploadPayload = {
@@ -48,7 +60,7 @@ const PRESIGN_ENDPOINTS = [
 
 export async function analyzeCV(
   file: File,
-  options?: { jobRole?: string }
+  options?: { jobRole?: string; jobDescription?: string }
 ): Promise<CVAnalysisResult> {
   if (BASE_URL) {
     try {
@@ -70,6 +82,9 @@ export async function analyzeCV(
     formData.append("cv", file);
     if (options?.jobRole) {
       formData.append("jobRole", options.jobRole);
+    }
+    if (options?.jobDescription) {
+      formData.append("jobDescription", options.jobDescription);
     }
     const res = await fetch(`${BASE_URL}/api/cv/analyze`, {
       method: "POST",
@@ -136,6 +151,18 @@ export async function analyzeCV(
         "Tailor summary to your target role",
         "Add missing tools from target job descriptions",
       ],
+    },
+    candidateProfile: {
+      summary:
+        "Product-minded frontend engineer with solid delivery experience, decent ATS alignment, and the biggest upside in sharper impact framing.",
+      strengths: ["Frontend foundations", "Structured communication", "Baseline tool coverage"],
+      risks: ["Limited quantified outcomes", "Narrative may feel generic without tailoring"],
+      likelySkills: ["React", "TypeScript", "JavaScript", "UI collaboration", "API integration"],
+      seniority: "Mid-level",
+      jobFitScore: 74,
+      jobFitVerdict: "partial-fit",
+      jobFitSummary:
+        "The candidate aligns with the core frontend scope, but the JD fit would improve with clearer evidence of measurable impact and closer keyword overlap with the target role.",
     },
   };
 }
@@ -232,6 +259,7 @@ export async function analyzeUploadedCV(payload: {
   key?: string;
   fileName?: string;
   jobRole?: string;
+  jobDescription?: string;
 }): Promise<CVAnalysisResult | null> {
   if (!BASE_URL) return null;
 
@@ -265,18 +293,19 @@ export async function getInterviewQuestions(
   }
 ): Promise<InterviewQuestionPayload[]> {
   try {
-    const briefQuery = options?.questionBrief
-      ? `&brief=${encodeURIComponent(options.questionBrief)}`
-      : "";
-    const endpoint = `${BASE_URL}/api/interview/questions?role=${encodeURIComponent(jobRole)}&type=${type}&count=${count}${briefQuery}`;
+    const endpoint = `${BASE_URL}/api/interview/questions`;
     const res = await fetch(endpoint, {
-      method: "GET",
+      method: "POST",
       cache: "no-store",
-      headers: options?.questionBrief
-        ? {
-            "x-question-brief": options.questionBrief,
-          }
-        : undefined,
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        role: jobRole,
+        type,
+        count,
+        questionBrief: options?.questionBrief,
+      }),
     });
 
     if (res.ok) {

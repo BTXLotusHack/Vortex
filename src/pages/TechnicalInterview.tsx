@@ -5,7 +5,7 @@ import { FeedbackPanel } from "@/components/FeedbackPanel";
 import { useInterviewStore, type FeedbackItem } from "@/stores/interviewStore";
 import { getInterviewQuestions, evaluateAnswer } from "@/lib/api";
 import { ArrowLeft, Loader2, Play, ChevronRight, Code2, Clock } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import Editor from "@monaco-editor/react";
 import { toast } from "sonner";
@@ -13,6 +13,7 @@ import { toast } from "sonner";
 type Question = Awaited<ReturnType<typeof getInterviewQuestions>>[number];
 
 export default function TechnicalInterview() {
+  const [searchParams] = useSearchParams();
   const [stage, setStage] = useState<"setup" | "interview" | "results">("setup");
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentQ, setCurrentQ] = useState(0);
@@ -29,13 +30,36 @@ export default function TechnicalInterview() {
   const [timer, setTimer] = useState(0);
   const [timerInterval, setTimerInterval] = useState<ReturnType<typeof setInterval> | null>(null);
 
-  const { currentJobRole, setJobRole, addAttempt, getImprovement } = useInterviewStore();
+  const fromPipeline = searchParams.get("from") === "pipeline";
+  const {
+    currentJobRole,
+    currentJobDescription,
+    candidateProfile,
+    pipeline,
+    setJobRole,
+    addAttempt,
+    getImprovement,
+    updatePipeline,
+  } = useInterviewStore();
+  const interviewsUnlocked = pipeline.cvUploaded && Boolean(candidateProfile?.jobFitSummary);
+
+  const generatedBrief = [
+    currentJobDescription.trim() ? `Job description:\n${currentJobDescription.trim()}` : "",
+    candidateProfile?.summary ? `Candidate summary:\n${candidateProfile.summary}` : "",
+    candidateProfile?.likelySkills?.length ? `Likely skillset: ${candidateProfile.likelySkills.join(", ")}` : "",
+    candidateProfile?.strengths?.length ? `Observed strengths: ${candidateProfile.strengths.join(", ")}` : "",
+    candidateProfile?.risks?.length ? `Skill gaps or risks: ${candidateProfile.risks.join(", ")}` : "",
+    candidateProfile?.jobFitSummary ? `JD fit assessment: ${candidateProfile.jobFitSummary}` : "",
+    "Set difficulty to match the role, job requirements, and likely candidate level. Use coding only when it fits the role.",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 
   const startInterview = async () => {
     setLoading(true);
     try {
       const qs = await getInterviewQuestions(currentJobRole, "technical", questionCount, {
-        questionBrief: questionBrief.trim() || undefined,
+        questionBrief: questionBrief.trim() || generatedBrief || undefined,
       });
       if (!qs.length) {
         toast.error("No questions generated. Please refine your brief and try again.");
@@ -109,8 +133,16 @@ export default function TechnicalInterview() {
           maxScore,
           feedback,
           jobRole: currentJobRole,
+          jobDescription: currentJobDescription,
           duration: timer,
         });
+        if (fromPipeline) {
+          updatePipeline({
+            active: true,
+            lastCompletedStep: "technical",
+            recommendedNextStep: "complete",
+          });
+        }
         setStage("results");
       }
     } finally {
@@ -152,12 +184,47 @@ export default function TechnicalInterview() {
           <ArrowLeft className="h-4 w-4" /> Dashboard
         </Link>
 
-        {stage === "setup" && (
+        {!interviewsUnlocked && (
+          <div className="rounded-lg border bg-card p-6">
+            <h1 className="text-2xl font-bold">Technical Interview Locked</h1>
+            <p className="mt-2 text-sm leading-7 text-muted-foreground">
+              Candidates must complete CV analysis against the job description before technical questions can be generated. The system uses that fit assessment to set the topic coverage and difficulty.
+            </p>
+            <div className="mt-5 flex flex-wrap gap-3">
+              <Link
+                to="/interview-pipeline"
+                className="rounded-lg bg-primary px-5 py-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+              >
+                Start CV + JD Analysis
+              </Link>
+              <Link
+                to="/cv-screening"
+                className="rounded-lg border px-5 py-3 text-sm font-medium transition-colors hover:bg-secondary"
+              >
+                Go to CV Screening
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {interviewsUnlocked && stage === "setup" && (
           <div className="opacity-0 animate-fade-up" style={{ animationFillMode: "forwards" }}>
             <h1 className="text-2xl font-bold mb-2">Technical Interview</h1>
             <p className="text-muted-foreground mb-8">
               Test your technical knowledge with role-specific questions covering fundamentals, frameworks, and system design.
             </p>
+
+            {fromPipeline && (
+              <div className="mb-6 rounded-lg border bg-card px-4 py-3 text-sm leading-6 text-muted-foreground">
+                This round is being generated from the pipeline context, so the technical depth is calibrated from the CV, the job description, and the inferred skill set.
+              </div>
+            )}
+
+            {candidateProfile?.jobFitSummary && (
+              <div className="mb-6 rounded-lg border bg-card px-4 py-3 text-sm leading-6 text-muted-foreground">
+                JD fit: <span className="font-medium text-foreground">{candidateProfile.jobFitVerdict || "partial-fit"}</span>. {candidateProfile.jobFitSummary}
+              </div>
+            )}
 
             <div className="space-y-4">
               <div>
@@ -191,7 +258,11 @@ export default function TechnicalInterview() {
                   value={questionBrief}
                   onChange={(e) => setQuestionBrief(e.target.value)}
                   rows={3}
-                  placeholder="Paste your required question topics here (e.g. React hooks + async race conditions + coding on debounce)."
+                  placeholder={
+                    fromPipeline
+                      ? "Optional override. Leave blank to use the CV + JD context automatically."
+                      : "Paste your required question topics here (e.g. React hooks + async race conditions + coding on debounce)."
+                  }
                   title="Custom question brief"
                   className="w-full rounded-lg border bg-card px-4 py-2.5 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-ring resize-none"
                 />
@@ -370,6 +441,15 @@ export default function TechnicalInterview() {
             >
               Try Again
             </button>
+
+            {fromPipeline && (
+              <Link
+                to="/interview-pipeline"
+                className="mt-3 flex w-full items-center justify-center rounded-lg bg-primary px-6 py-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+              >
+                Return to Pipeline Overview
+              </Link>
+            )}
           </div>
         )}
       </div>

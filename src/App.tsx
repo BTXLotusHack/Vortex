@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuthStore } from "@/stores/authStore";
 import Dashboard from "./pages/Dashboard";
 import CVScreening from "./pages/CVScreening";
+import InterviewPipeline from "./pages/InterviewPipeline";
 import VoiceInterview from "./pages/VoiceInterview";
 import TechnicalInterview from "./pages/TechnicalInterview";
 import Results from "./pages/Results";
@@ -32,6 +33,7 @@ const App = () => (
         <AuthInitializer>
           <Routes>
             <Route path="/" element={<Dashboard />} />
+            <Route path="/interview-pipeline" element={<InterviewPipeline />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/cv-screening" element={<CVScreening />} />

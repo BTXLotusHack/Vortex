@@ -111,8 +111,12 @@ function buildFallbackQuestions(type, count) {
 }
 async function generateQuestionsWithAI(role, type, count, questionBrief) {
     const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey)
+    if (!apiKey) {
+        if (type === "technical") {
+            throw new Error("OPENAI_API_KEY is required for technical question generation");
+        }
         return buildFallbackQuestions(type, count);
+    }
     const model = process.env.OPENAI_CHAT_MODEL || "gpt-4o-mini";
     const llm = new ChatOpenAI({ apiKey, model, temperature: 0.9 });
     const nonce = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -213,11 +217,14 @@ interviewRouter.get("/questions", optionalAuth, async (req, res) => {
         const questionBriefQuery = req.query.brief;
         const questionBrief = (questionBriefHeader || questionBriefQuery || "").trim() || undefined;
         const questions = await generateQuestionsWithAI(role, type, count, questionBrief);
+        res.set("Cache-Control", "no-store");
         return res.json(questions);
     }
     catch (error) {
         console.error("Questions error:", error);
-        res.status(500).json({ error: "Failed to generate questions" });
+        const message = error instanceof Error ? error.message : "Failed to generate questions";
+        const status = message.includes("OPENAI_API_KEY") ? 503 : 500;
+        res.status(status).json({ error: message });
     }
 });
 // Evaluate an answer

@@ -2,10 +2,11 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { ModuleCard } from "@/components/ModuleCard";
 import { ScoreRing } from "@/components/ScoreRing";
 import { useInterviewStore } from "@/stores/interviewStore";
-import { FileText, Mic, Code2, TrendingUp, TrendingDown } from "lucide-react";
+import { FileText, Mic, Code2, TrendingUp, TrendingDown, Sparkles, ArrowRight } from "lucide-react";
+import { Link } from "react-router-dom";
 
 export default function Dashboard() {
-  const { getLatestAttempt, getModuleAttempts, getTotalScore, getImprovement } =
+  const { getLatestAttempt, getModuleAttempts, getTotalScore, getImprovement, pipeline, candidateProfile } =
     useInterviewStore();
 
   const cvAttempt = getLatestAttempt("cv-screening");
@@ -14,6 +15,7 @@ export default function Dashboard() {
   const total = getTotalScore();
 
   const hasAnyAttempt = cvAttempt || voiceAttempt || techAttempt;
+  const interviewsUnlocked = pipeline.cvUploaded && Boolean(candidateProfile?.jobFitSummary);
 
   return (
     <AppLayout>
@@ -44,6 +46,20 @@ export default function Dashboard() {
               <span className="rounded-full border border-border/70 bg-white/55 px-4 py-2">
                 Technical rounds
               </span>
+            </div>
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Link
+                to="/interview-pipeline"
+                className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-medium text-primary-foreground transition-all hover:bg-primary/90"
+              >
+                <Sparkles className="h-4 w-4" /> Start Guided Pipeline
+              </Link>
+              <Link
+                to="/results"
+                className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-white/65 px-5 py-3 text-sm font-medium text-foreground transition-colors hover:bg-white"
+              >
+                View Results <ArrowRight className="h-4 w-4" />
+              </Link>
             </div>
           </div>
         </div>
@@ -103,6 +119,8 @@ export default function Dashboard() {
             }
             attempts={getModuleAttempts("voice-interview").length}
             delay={280}
+            disabled={!interviewsUnlocked}
+            disabledReason="Analyze the CV against the JD first to unlock voice interview access."
           />
           <ModuleCard
             title="Technical Interview"
@@ -116,6 +134,8 @@ export default function Dashboard() {
             }
             attempts={getModuleAttempts("technical-interview").length}
             delay={360}
+            disabled={!interviewsUnlocked}
+            disabledReason="Analyze the CV against the JD first to unlock technical interview access."
           />
         </div>
 

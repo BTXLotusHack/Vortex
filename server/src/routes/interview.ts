@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import { optionalAuth } from "../middleware/auth.js";
 import { ChatOpenAI } from "@langchain/openai";
 
@@ -259,16 +259,20 @@ Return strict JSON:
   }>(readContentAsText(response.content));
 }
 
-// Get interview questions
-interviewRouter.get("/questions", optionalAuth, async (req, res) => {
+async function handleQuestionRequest(
+  req: Request,
+  res: Response,
+) {
   try {
-    const role = (req.query.role as string) || "Frontend Developer";
-    const rawType = (req.query.type as string) || "voice";
+    const source = req.method === "POST" ? req.body : req.query;
+    const role = (source.role as string) || "Frontend Developer";
+    const rawType = (source.type as string) || "voice";
     const type: InterviewType = rawType === "technical" ? "technical" : "voice";
-    const count = clampQuestionCount(req.query.count, 5);
+    const count = clampQuestionCount(source.count, 5);
     const questionBriefHeader = req.header("x-question-brief");
-    const questionBriefQuery = req.query.brief as string | undefined;
-    const questionBrief = (questionBriefHeader || questionBriefQuery || "").trim() || undefined;
+    const questionBriefPayload =
+      (req.method === "POST" ? req.body?.questionBrief : req.query.brief) as string | undefined;
+    const questionBrief = (questionBriefHeader || questionBriefPayload || "").trim() || undefined;
 
     const questions = await generateQuestionsWithAI(role, type, count, questionBrief);
     res.set("Cache-Control", "no-store");
@@ -279,7 +283,11 @@ interviewRouter.get("/questions", optionalAuth, async (req, res) => {
     const status = message.includes("OPENAI_API_KEY") ? 503 : 500;
     res.status(status).json({ error: message });
   }
-});
+}
+
+// Get interview questions
+interviewRouter.get("/questions", optionalAuth, handleQuestionRequest);
+interviewRouter.post("/questions", optionalAuth, handleQuestionRequest);
 
 // Evaluate an answer
 interviewRouter.post("/evaluate", optionalAuth, async (req, res) => {
