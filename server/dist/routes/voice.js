@@ -1,6 +1,36 @@
 import { Router } from "express";
 import { optionalAuth } from "../middleware/auth.js";
 export const voiceRouter = Router();
+voiceRouter.get("/conversation-token", optionalAuth, async (req, res) => {
+    try {
+        const apiKey = process.env.ELEVENLABS_API_KEY;
+        const configuredAgentId = process.env.ELEVENLABS_AGENT_ID || process.env.VITE_ELEVENLABS_AGENT_ID;
+        const requestedAgentId = typeof req.query.agentId === "string" ? req.query.agentId : undefined;
+        const agentId = requestedAgentId || configuredAgentId;
+        if (!apiKey || !agentId) {
+            return res.status(204).send();
+        }
+        const response = await fetch(`https://api.elevenlabs.io/v1/convai/conversation/token?agent_id=${encodeURIComponent(agentId)}`, {
+            headers: {
+                "xi-api-key": apiKey,
+            },
+        });
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error("ElevenLabs conversation token error:", errorText);
+            return res.status(response.status).json({ error: "Failed to get conversation token" });
+        }
+        const body = await response.json().catch(() => null);
+        if (!body?.token) {
+            return res.status(500).json({ error: "Conversation token missing from ElevenLabs response" });
+        }
+        res.json({ token: body.token });
+    }
+    catch (error) {
+        console.error("Conversation token error:", error);
+        res.status(500).json({ error: "Failed to get conversation token" });
+    }
+});
 // Text-to-Speech — proxy to ElevenLabs
 voiceRouter.post("/tts", optionalAuth, async (req, res) => {
     try {

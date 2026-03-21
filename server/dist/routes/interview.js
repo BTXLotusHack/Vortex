@@ -206,16 +206,16 @@ Return strict JSON:
     ]);
     return parseJsonText(readContentAsText(response.content));
 }
-// Get interview questions
-interviewRouter.get("/questions", optionalAuth, async (req, res) => {
+async function handleQuestionRequest(req, res) {
     try {
-        const role = req.query.role || "Frontend Developer";
-        const rawType = req.query.type || "voice";
+        const source = req.method === "POST" ? req.body : req.query;
+        const role = source.role || "Frontend Developer";
+        const rawType = source.type || "voice";
         const type = rawType === "technical" ? "technical" : "voice";
-        const count = clampQuestionCount(req.query.count, 5);
+        const count = clampQuestionCount(source.count, 5);
         const questionBriefHeader = req.header("x-question-brief");
-        const questionBriefQuery = req.query.brief;
-        const questionBrief = (questionBriefHeader || questionBriefQuery || "").trim() || undefined;
+        const questionBriefPayload = (req.method === "POST" ? req.body?.questionBrief : req.query.brief);
+        const questionBrief = (questionBriefHeader || questionBriefPayload || "").trim() || undefined;
         const questions = await generateQuestionsWithAI(role, type, count, questionBrief);
         res.set("Cache-Control", "no-store");
         return res.json(questions);
@@ -226,7 +226,10 @@ interviewRouter.get("/questions", optionalAuth, async (req, res) => {
         const status = message.includes("OPENAI_API_KEY") ? 503 : 500;
         res.status(status).json({ error: message });
     }
-});
+}
+// Get interview questions
+interviewRouter.get("/questions", optionalAuth, handleQuestionRequest);
+interviewRouter.post("/questions", optionalAuth, handleQuestionRequest);
 // Evaluate an answer
 interviewRouter.post("/evaluate", optionalAuth, async (req, res) => {
     try {

@@ -12,34 +12,17 @@ import {
   Sparkles,
 } from "lucide-react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { ScoreRing } from "@/components/ScoreRing";
-import { FeedbackPanel } from "@/components/FeedbackPanel";
-import { useInterviewStore, type FeedbackItem } from "@/stores/interviewStore";
-import { apiFetch, getInterviewQuestions, evaluateAnswer } from "@/lib/api";
-import {
-  ArrowLeft,
-  Mic,
-  MicOff,
-  Loader2,
-  Play,
-  ChevronRight,
-  Volume2,
-  VolumeX,
-} from "lucide-react";
-import { Link } from "react-router-dom";
+import { apiFetch } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { Conversation } from "@elevenlabs/client";
 
-type RealtimeStatus =
-  | "disconnected"
-  | "connecting"
-  | "connected"
-  | "disconnecting";
+type TranscriptMessage = {
+  id: string;
+  role: "user" | "agent";
+  message: string;
+};
 
-type Question = Awaited<ReturnType<typeof getInterviewQuestions>>[number];
-
-const API_URL = import.meta.env.VITE_API_URL || "";
+const AGENT_ID = import.meta.env.VITE_ELEVENLABS_AGENT_ID as string | undefined;
 
 export default function VoiceInterview() {
   const navigate = useNavigate();
@@ -56,45 +39,30 @@ export default function VoiceInterview() {
   const conversationRef = useRef<Conversation | null>(null);
   const animationFrameRef = useRef<number | null>(null);
 
-  const { currentJobRole, setJobRole, addAttempt, getImprovement } =
-    useInterviewStore();
-  const getAuthHeaders = useCallback((): Record<string, string> => ({}), []);
+  const {
+    currentJobRole,
+    currentJobDescription,
+    candidateProfile,
+    pipeline,
+    updatePipeline,
+  } = useInterviewStore();
 
-  const fetchConversationToken = async (): Promise<string | null> => {
-    if (!API_URL) return null;
+  const interviewsUnlocked =
+    pipeline.cvUploaded && Boolean(candidateProfile?.jobFitSummary);
 
-    const candidates = [
-      "/api/voice/conversation-token",
-      "/api/voice/token",
-      "/api/voice/realtime-token",
-    ];
-
-    for (const endpoint of candidates) {
-      try {
-        const response = await fetch(
-          `${API_URL}${endpoint}?agentId=${encodeURIComponent(agentId)}`,
-          {
-            method: "GET",
-          },
-        );
-
-        if (!response.ok) continue;
-
-        const contentType = response.headers.get("content-type") || "";
-        if (contentType.includes("application/json")) {
-          const data = await response.json().catch(() => null);
-          if (typeof data?.token === "string") return data.token;
-        }
-
-        const text = await response.text();
-        if (text) return text;
-      } catch {
-        continue;
-      }
-    }
-
-    return null;
-  };
+  const dynamicVariables = useMemo<Record<string, string | number | boolean>>(
+    () => ({
+      job_role: currentJobRole,
+      job_description: currentJobDescription || "",
+      candidate_summary: candidateProfile?.summary || "",
+      candidate_strengths: candidateProfile?.strengths?.join(", ") || "",
+      candidate_risks: candidateProfile?.risks?.join(", ") || "",
+      candidate_skills: candidateProfile?.likelySkills?.join(", ") || "",
+      job_fit_summary: candidateProfile?.jobFitSummary || "",
+      job_fit_score: candidateProfile?.jobFitScore ?? 0,
+    }),
+    [candidateProfile, currentJobDescription, currentJobRole],
+  );
 
   const stopVolumeLoop = () => {
     if (animationFrameRef.current !== null) {
@@ -106,7 +74,7 @@ export default function VoiceInterview() {
   const startVolumeLoop = () => {
     stopVolumeLoop();
 
-    const tick = async () => {
+    const tick = () => {
       const session = conversationRef.current;
       if (!session || !session.isOpen()) {
         setAudioLevel(0.18);
@@ -127,6 +95,40 @@ export default function VoiceInterview() {
     animationFrameRef.current = requestAnimationFrame(tick);
   };
 
+  const fetchConversationToken = async (): Promise<string | null> => {
+    const candidates = [
+      "/api/voice/conversation-token",
+      "/api/voice/token",
+      "/api/voice/realtime-token",
+    ];
+
+    for (const endpoint of candidates) {
+      try {
+        const suffix = AGENT_ID
+          ? `?agentId=${encodeURIComponent(AGENT_ID)}`
+          : "";
+        const response = await apiFetch(`${endpoint}${suffix}`, {
+          method: "GET",
+        });
+
+        if (!response.ok) continue;
+
+        const contentType = response.headers.get("content-type") || "";
+        if (contentType.includes("application/json")) {
+          const data = await response.json().catch(() => null);
+          if (typeof data?.token === "string") return data.token;
+        }
+
+        const text = await response.text();
+        if (text) return text;
+      } catch {
+        continue;
+      }
+    }
+
+    return null;
+  };
+
   const startConversation = async () => {
     try {
       if (conversationRef.current) return;
@@ -138,6 +140,12 @@ export default function VoiceInterview() {
       await navigator.mediaDevices.getUserMedia({ audio: true });
 
       const conversationToken = await fetchConversationToken();
+      if (!conversationToken && !AGENT_ID) {
+        throw new Error(
+          "Missing realtime token endpoint and VITE_ELEVENLABS_AGENT_ID is not set.",
+        );
+      }
+
       const sharedHandlers = {
         dynamicVariables,
         onConnect: ({ conversationId: id }: { conversationId: string }) => {
@@ -168,19 +176,16 @@ export default function VoiceInterview() {
         onModeChange: ({ mode: nextMode }: { mode: Mode }) => {
           setMode(nextMode);
         },
-        onMessage: ({
-          role,
-          message,
-        }: {
-          role: "user" | "agent";
-          message: string;
-        }) => {
+        onMessage: ({ role, message }: { role: string; message: string }) => {
           if (!message.trim()) return;
+          const normalizedRole = role === "user" ? "user" : "agent";
           setMessages((current) => [
             ...current,
             {
-              id: `${role}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-              role,
+              id: `${normalizedRole}-${Date.now()}-${Math.random()
+                .toString(36)
+                .slice(2, 8)}`,
+              role: normalizedRole,
               message,
             },
           ]);
@@ -191,17 +196,23 @@ export default function VoiceInterview() {
       try {
         conversation = await Conversation.startSession({
           connectionType: "webrtc",
-          ...(conversationToken ? { conversationToken } : { agentId }),
+          ...(conversationToken
+            ? { conversationToken }
+            : { agentId: AGENT_ID! }),
           ...sharedHandlers,
         });
       } catch (primaryError) {
+        if (!AGENT_ID) {
+          throw primaryError;
+        }
+
         console.warn(
           "WebRTC conversation start failed, retrying with websocket.",
           primaryError,
         );
         conversation = await Conversation.startSession({
           connectionType: "websocket",
-          agentId,
+          agentId: AGENT_ID,
           ...sharedHandlers,
         });
       }
@@ -223,187 +234,22 @@ export default function VoiceInterview() {
       // Session may already be closed.
     }
     conversationRef.current = null;
-    setRealtimeStatus("disconnected");
-    setRecording(false);
+    setStatus("disconnected");
+    setAudioLevel(0.18);
   };
 
-  // TTS: Read question aloud via ElevenLabs or Web Speech API
-  const speakQuestion = useCallback(
-    async (text: string) => {
-      if (!ttsEnabled) return;
-
-      // Try ElevenLabs via backend
-      if (API_URL) {
-        try {
-          setIsSpeaking(true);
-          const response = await fetch(`${API_URL}/api/voice/tts`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              ...getAuthHeaders(),
-            },
-            body: JSON.stringify({ text }),
-          });
-
-          if (response.ok) {
-            const blob = await response.blob();
-            const url = URL.createObjectURL(blob);
-            const audio = new Audio(url);
-            audioRef.current = audio;
-            audio.onended = () => {
-              setIsSpeaking(false);
-              URL.revokeObjectURL(url);
-            };
-            await audio.play();
-            return;
-          }
-        } catch (err) {
-          console.warn(
-            "ElevenLabs TTS unavailable, falling back to browser speech",
-          );
-        }
-      }
-
-      // Fallback: Web Speech API
-      if ("speechSynthesis" in window) {
-        setIsSpeaking(true);
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.rate = 0.95;
-        utterance.onend = () => setIsSpeaking(false);
-        speechSynthesis.speak(utterance);
-      }
-    },
-    [ttsEnabled, getAuthHeaders],
-  );
-
-  // Start recording via MediaRecorder
-  const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
-      audioChunksRef.current = [];
-
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunksRef.current.push(e.data);
-      };
-
-      mediaRecorder.onstop = async () => {
-        stream.getTracks().forEach((t) => t.stop());
-        const audioBlob = new Blob(audioChunksRef.current, {
-          type: "audio/webm",
-        });
-
-        // Try server STT
-        if (API_URL) {
-          try {
-            const formData = new FormData();
-            formData.append("audio", audioBlob, "recording.webm");
-            const res = await fetch(`${API_URL}/api/voice/stt`, {
-              method: "POST",
-              headers: getAuthHeaders(),
-              body: formData,
-            });
-            if (res.ok) {
-              const data = await res.json();
-              if (data.text) {
-                setUserAnswer((prev) => (prev ? prev + " " : "") + data.text);
-                return;
-              }
-            }
-          } catch {
-            console.warn("Server STT unavailable");
-          }
-        }
-
-        // Fallback: Web Speech API (already handles via SpeechRecognition below)
-        toast.info(
-          "Voice recorded. Paste or type your answer if speech-to-text is unavailable.",
-        );
-      };
-
-      mediaRecorder.start();
-      setRecording(true);
-
-      // Also try Web Speech API for live transcription
-      if (
-        "webkitSpeechRecognition" in window ||
-        "SpeechRecognition" in window
-      ) {
-        const SpeechRecognition =
-          (window as any).webkitSpeechRecognition ||
-          (window as any).SpeechRecognition;
-        const recognition = new SpeechRecognition();
-        recognition.continuous = true;
-        recognition.interimResults = true;
-        recognition.lang = "en-US";
-
-        recognition.onresult = (event: any) => {
-          let transcript = "";
-          for (let i = event.resultIndex; i < event.results.length; i++) {
-            if (event.results[i].isFinal) {
-              transcript += event.results[i][0].transcript;
-            }
-          }
-          if (transcript) {
-            setUserAnswer((prev) => (prev ? prev + " " : "") + transcript);
-          }
-        };
-
-        recognition.onerror = () => {};
-        recognition.start();
-        (mediaRecorderRef.current as any)._recognition = recognition;
-      }
-    } catch (err) {
-      toast.error("Microphone access denied. Please allow microphone access.");
-    }
+  const markInterviewComplete = () => {
+    setMarkedComplete(true);
+    updatePipeline({
+      active: true,
+      lastCompletedStep: "voice",
+      recommendedNextStep: pipeline.technicalRequired
+        ? "technical"
+        : "complete",
+    });
+    toast.success("Voice interview marked complete.");
   };
 
-  const stopRecording = async () => {
-    if (conversationRef.current) {
-      await stopRealtimeConversation();
-      return;
-    }
-
-    if (mediaRecorderRef.current?.state === "recording") {
-      mediaRecorderRef.current.stop();
-      const recognition = (mediaRecorderRef.current as any)?._recognition;
-      if (recognition) recognition.stop();
-    }
-    setRecording(false);
-  };
-
-  const toggleRecording = async () => {
-    if (recording) {
-      await stopRecording();
-      return;
-    }
-
-    if (realtimeEnabled) {
-      await startRealtimeConversation();
-    } else {
-      startRecording();
-    }
-  };
-
-  const startInterview = async () => {
-    setLoading(true);
-    try {
-      const qs = await getInterviewQuestions(
-        currentJobRole,
-        "voice",
-        questionCount,
-      );
-      setQuestions(qs);
-      setCurrentQ(0);
-      setAnswers([]);
-      setStage("interview");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Read question when it changes
   useEffect(() => {
     return () => {
       stopVolumeLoop();
