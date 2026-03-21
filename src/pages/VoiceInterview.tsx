@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Conversation, type Mode, type Status } from "@elevenlabs/client";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useInterviewStore } from "@/stores/interviewStore";
-import { evaluateVoiceTranscript } from "@/lib/api";
+import { apiUrl, evaluateVoiceTranscript } from "@/lib/api";
 import {
   ArrowLeft,
   ArrowRight,
@@ -16,7 +16,6 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
-const API_URL = import.meta.env.VITE_API_URL || "";
 const DEFAULT_ELEVENLABS_AGENT_ID = "agent_5601km7vdgwqfkdtxdev14rsyet7";
 
 type TranscriptMessage = {
@@ -80,8 +79,6 @@ export default function VoiceInterview() {
   );
 
   const fetchConversationToken = async (): Promise<string | null> => {
-    if (!API_URL) return null;
-
     const candidates = [
       "/api/voice/conversation-token",
       "/api/voice/token",
@@ -91,9 +88,10 @@ export default function VoiceInterview() {
     for (const endpoint of candidates) {
       try {
         const response = await fetch(
-          `${API_URL}${endpoint}?agentId=${encodeURIComponent(agentId)}`,
+          `${apiUrl(endpoint)}?agentId=${encodeURIComponent(agentId)}`,
           {
             method: "GET",
+            credentials: "include",
           },
         );
 

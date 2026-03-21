@@ -10,9 +10,26 @@ import { initializeSchema } from "./db/schema.js";
 const app = express();
 const PORT = process.env.PORT || 3000;
 const hasDbConnectionString = Boolean(process.env.DATABASE_URL || process.env.SUPABASE_DB_URL || process.env.NEON_DATABASE_URL);
+function getAllowedClientOrigins() {
+    const configured = (process.env.CLIENT_URL || process.env.CLIENT_ORIGIN || "")
+        .split(",")
+        .map((value) => value.trim().replace(/\/+$/, ""))
+        .filter(Boolean);
+    if (configured.length > 0) {
+        return configured;
+    }
+    return ["http://localhost:8000", "http://127.0.0.1:8000"];
+}
+const allowedClientOrigins = new Set(getAllowedClientOrigins());
 // Middleware
 app.use(cors({
-    origin: process.env.CLIENT_URL || "http://localhost:8000",
+    origin(origin, callback) {
+        if (!origin || allowedClientOrigins.has(origin)) {
+            callback(null, true);
+            return;
+        }
+        callback(new Error(`CORS origin not allowed: ${origin}`));
+    },
     credentials: true,
 }));
 app.use(express.json());

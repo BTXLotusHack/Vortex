@@ -7,6 +7,7 @@ export const AUTH_COOKIE_NAME = process.env.AUTH_COOKIE_NAME || "vortex_auth";
 
 const DEFAULT_TOKEN_TTL = "7d";
 const DEFAULT_COOKIE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const COOKIE_SAME_SITE_VALUES = new Set(["strict", "lax", "none"]);
 
 function getJwtSecret() {
   const secret = process.env.JWT_SECRET;
@@ -20,6 +21,18 @@ function getJwtSecret() {
   return secret;
 }
 
+function getCookieSameSite() {
+  const sameSite =
+    process.env.COOKIE_SAME_SITE?.trim().toLowerCase() ||
+    process.env.AUTH_COOKIE_SAME_SITE?.trim().toLowerCase();
+
+  if (sameSite && COOKIE_SAME_SITE_VALUES.has(sameSite)) {
+    return sameSite as "strict" | "lax" | "none";
+  }
+
+  return "lax" as const;
+}
+
 function shouldUseSecureCookies() {
   if (process.env.COOKIE_SECURE === "true") {
     return true;
@@ -29,7 +42,7 @@ function shouldUseSecureCookies() {
     return false;
   }
 
-  return process.env.NODE_ENV === "production";
+  return getCookieSameSite() === "none" || process.env.NODE_ENV === "production";
 }
 
 function getTokenTtl() {
@@ -42,6 +55,11 @@ function getCookieMaxAge() {
   return Number.isFinite(parsed) && parsed > 0
     ? parsed
     : DEFAULT_COOKIE_MAX_AGE_MS;
+}
+
+function getCookieDomain() {
+  const domain = process.env.COOKIE_DOMAIN?.trim();
+  return domain || undefined;
 }
 
 function parseCookies(cookieHeader?: string | null) {
@@ -60,8 +78,9 @@ export function getAuthCookieOptions() {
   return {
     httpOnly: true,
     secure: shouldUseSecureCookies(),
-    sameSite: "strict" as const,
+    sameSite: getCookieSameSite(),
     maxAge: getCookieMaxAge(),
+    domain: getCookieDomain(),
     path: "/",
   };
 }
@@ -116,7 +135,8 @@ export function clearAuthCookie(res: Response) {
   res.clearCookie(AUTH_COOKIE_NAME, {
     httpOnly: true,
     secure: shouldUseSecureCookies(),
-    sameSite: "strict",
+    sameSite: getCookieSameSite(),
+    domain: getCookieDomain(),
     path: "/",
   });
 }

@@ -5,8 +5,9 @@ export declare const AUTH_COOKIE_NAME: string;
 export declare function getAuthCookieOptions(): {
     httpOnly: boolean;
     secure: boolean;
-    sameSite: "strict";
+    sameSite: "strict" | "lax" | "none";
     maxAge: number;
+    domain: string | undefined;
     path: string;
 };
 export declare function signAuthToken(user: AuthUser): string;
