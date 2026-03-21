@@ -57,6 +57,11 @@ function getCookieMaxAge() {
     : DEFAULT_COOKIE_MAX_AGE_MS;
 }
 
+function getCookieDomain() {
+  const domain = process.env.COOKIE_DOMAIN?.trim();
+  return domain || undefined;
+}
+
 function parseCookies(cookieHeader?: string | null) {
   if (!cookieHeader) return {};
 
@@ -73,7 +78,7 @@ export function getAuthCookieOptions() {
   return {
     httpOnly: true,
     secure: shouldUseSecureCookies(),
-    sameSite: "strict" as const,
+    sameSite: getCookieSameSite(),
     maxAge: getCookieMaxAge(),
     domain: getCookieDomain(),
     path: "/",
@@ -130,7 +135,8 @@ export function clearAuthCookie(res: Response) {
   res.clearCookie(AUTH_COOKIE_NAME, {
     httpOnly: true,
     secure: shouldUseSecureCookies(),
-    sameSite: "strict",
+    sameSite: getCookieSameSite(),
+    domain: getCookieDomain(),
     path: "/",
   });
 }
