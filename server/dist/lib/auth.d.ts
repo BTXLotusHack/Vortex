@@ -1,3 +1,4 @@
+import "../env.js";
 import type { Request, Response } from "express";
 import type { AuthUser } from "../middleware/auth.js";
 export declare const AUTH_COOKIE_NAME: string;

@@ -1,3 +1,4 @@
+import "../env.js";
 import jwt from "jsonwebtoken";
 export const AUTH_COOKIE_NAME = process.env.AUTH_COOKIE_NAME || "vortex_auth";
 const DEFAULT_TOKEN_TTL = "7d";
@@ -10,17 +11,23 @@ function getJwtSecret() {
     return secret;
 }
 function shouldUseSecureCookies() {
-    if (process.env.COOKIE_SECURE === "false" && process.env.NODE_ENV !== "production") {
+    if (process.env.COOKIE_SECURE === "true") {
+        return true;
+    }
+    if (process.env.COOKIE_SECURE === "false") {
         return false;
     }
-    return true;
+    return process.env.NODE_ENV === "production";
 }
 function getTokenTtl() {
-    return (process.env.JWT_EXPIRES_IN || DEFAULT_TOKEN_TTL);
+    return (process.env.JWT_EXPIRES_IN ||
+        DEFAULT_TOKEN_TTL);
 }
 function getCookieMaxAge() {
     const parsed = Number(process.env.AUTH_COOKIE_MAX_AGE_MS);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_COOKIE_MAX_AGE_MS;
+    return Number.isFinite(parsed) && parsed > 0
+        ? parsed
+        : DEFAULT_COOKIE_MAX_AGE_MS;
 }
 function parseCookies(cookieHeader) {
     if (!cookieHeader)

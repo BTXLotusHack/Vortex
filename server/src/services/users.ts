@@ -1,3 +1,4 @@
+import "../env.js";
 import { randomUUID } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { query } from "../db/pool.js";
@@ -67,7 +68,36 @@ export function validateLoginInput(input: { email?: unknown; password?: unknown 
 }
 
 export async function createUserAccount(input: { name: string; email: string; password: string }) {
+  const existing = await query<DbUserRow>(
+    `
+      SELECT id, email, name, avatar, password_hash
+      FROM users
+      WHERE LOWER(email) = LOWER($1)
+      LIMIT 1;
+    `,
+    [input.email],
+  );
+
+  const existingUser = existing.rows[0];
+  if (existingUser?.password_hash) {
+    throw new AuthConflictError("Unable to create account.");
+  }
+
   const passwordHash = await bcrypt.hash(input.password, SALT_ROUNDS);
+
+  if (existingUser) {
+    const updated = await query<AuthUser>(
+      `
+        UPDATE users
+        SET name = $1, password_hash = $2
+        WHERE id = $3
+        RETURNING id, email, name, avatar;
+      `,
+      [input.name, passwordHash, existingUser.id],
+    );
+
+    return updated.rows[0];
+  }
 
   try {
     const result = await query<AuthUser>(

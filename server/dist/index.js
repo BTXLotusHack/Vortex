@@ -1,15 +1,14 @@
+import "./env.js";
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
 import { authRouter, configurePassport } from "./routes/auth.js";
 import { cvRouter } from "./routes/cv.js";
 import { interviewRouter } from "./routes/interview.js";
 import { voiceRouter } from "./routes/voice.js";
 import { dataRouter } from "./routes/data.js";
 import { initializeSchema } from "./db/schema.js";
-dotenv.config();
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3000;
 const hasDbConnectionString = Boolean(process.env.DATABASE_URL || process.env.SUPABASE_DB_URL || process.env.NEON_DATABASE_URL);
 // Middleware
 app.use(cors({

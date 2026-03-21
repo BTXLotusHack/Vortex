@@ -43,19 +43,19 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       <aside className="noise-overlay hidden h-[calc(100vh-2.5rem)] w-[280px] shrink-0 flex-col overflow-hidden rounded-[2rem] border border-sidebar-border/80 bg-sidebar/95 text-sidebar-foreground shadow-[0_24px_80px_hsl(166_35%_8%/0.35)] md:sticky md:top-5 md:flex">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,hsl(44_50%_70%/0.12),transparent_34%),linear-gradient(180deg,hsl(164_30%_16%/0.96),hsl(167_22%_10%/0.98))]" />
 
-        <div className="relative flex h-20 items-center gap-4 border-b border-sidebar-border/80 px-6">
+        <div className="relative flex shrink-0 items-center gap-4 border-b border-sidebar-border/80 px-6 py-5">
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-sidebar-primary text-sidebar-primary-foreground shadow-[0_14px_36px_hsl(45_60%_70%/0.12)]">
             <img src="./favicon.png" alt="VORTEX" className="h-7 w-7 rounded-lg object-cover" />
           </div>
-          <div className="flex flex-col leading-none">
+          <div className="min-w-0 flex flex-col leading-none">
             <span className="font-display text-2xl text-sidebar-accent-foreground">VORTEX</span>
-            <span className="mt-1 text-[10px] uppercase tracking-[0.32em] text-sidebar-foreground/60">
+            <span className="mt-1 text-[10px] uppercase tracking-[0.28em] text-sidebar-foreground/60">
               Interview OS
             </span>
           </div>
         </div>
 
-        <nav className="relative flex-1 space-y-2 px-4 py-6">
+        <nav className="relative min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-6">
           {navItems.map((item) => {
             const active = pathname === item.href;
             return (
@@ -95,9 +95,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
-        <div className="relative border-t border-sidebar-border/80 px-6 py-5">
+        <div className="relative shrink-0 border-t border-sidebar-border/80 px-6 py-4">
           {user ? (
-            <div className="space-y-2">
+            <div className="space-y-3">
               <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
                 <div className="mb-2 text-[10px] uppercase tracking-[0.28em] text-sidebar-foreground/45">
                   Signed In
@@ -114,7 +114,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     <div className="truncate text-sm font-medium text-sidebar-accent-foreground">
                       {user.name}
                     </div>
-                    <div className="text-xs text-sidebar-foreground/50">
+                    <div className="truncate text-xs text-sidebar-foreground/50">
                       Ready for another round
                     </div>
                   </div>
@@ -122,7 +122,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               </div>
               <button
                 onClick={handleLogout}
-                className="flex items-center gap-1.5 px-1 text-xs text-sidebar-foreground/55 transition-colors hover:text-sidebar-foreground"
+                className="inline-flex items-center gap-1.5 px-1 text-xs text-sidebar-foreground/55 transition-colors hover:text-sidebar-foreground"
               >
                 <LogOut className="h-3 w-3" /> Sign out
               </button>

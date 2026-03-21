@@ -17,6 +17,10 @@ export function configurePassport() {
   return;
 }
 
+function isMissingDatabaseConfig(error: unknown) {
+  return error instanceof Error && error.message.includes("Missing database URL");
+}
+
 authRouter.post("/signup", async (req, res) => {
   try {
     const input = validateSignupInput(req.body || {});
@@ -32,6 +36,10 @@ authRouter.post("/signup", async (req, res) => {
 
     if (error instanceof AuthConflictError) {
       return res.status(409).json({ error: "Unable to create account." });
+    }
+
+    if (isMissingDatabaseConfig(error)) {
+      return res.status(500).json({ error: "Authentication service is not configured." });
     }
 
     console.error("Signup failed:", error);
@@ -50,6 +58,10 @@ authRouter.post("/login", async (req, res) => {
   } catch (error) {
     if (error instanceof AuthUnauthorizedError) {
       return res.status(401).json({ error: "Invalid email or password." });
+    }
+
+    if (isMissingDatabaseConfig(error)) {
+      return res.status(500).json({ error: "Authentication service is not configured." });
     }
 
     console.error("Login failed:", error);

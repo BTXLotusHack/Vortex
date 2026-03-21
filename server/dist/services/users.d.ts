@@ -1,3 +1,4 @@
+import "../env.js";
 import type { AuthUser } from "../middleware/auth.js";
 export declare class AuthValidationError extends Error {
 }

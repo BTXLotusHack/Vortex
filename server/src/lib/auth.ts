@@ -1,3 +1,4 @@
+import "../env.js";
 import type { Request, Response } from "express";
 import jwt, { type SignOptions } from "jsonwebtoken";
 import type { AuthUser } from "../middleware/auth.js";
@@ -11,27 +12,36 @@ function getJwtSecret() {
   const secret = process.env.JWT_SECRET;
 
   if (!secret) {
-    throw new Error("Missing JWT_SECRET. Set it in the server environment before using auth.");
+    throw new Error(
+      "Missing JWT_SECRET. Set it in the server environment before using auth.",
+    );
   }
 
   return secret;
 }
 
 function shouldUseSecureCookies() {
-  if (process.env.COOKIE_SECURE === "false" && process.env.NODE_ENV !== "production") {
+  if (process.env.COOKIE_SECURE === "true") {
+    return true;
+  }
+
+  if (process.env.COOKIE_SECURE === "false") {
     return false;
   }
 
-  return true;
+  return process.env.NODE_ENV === "production";
 }
 
 function getTokenTtl() {
-  return (process.env.JWT_EXPIRES_IN || DEFAULT_TOKEN_TTL) as SignOptions["expiresIn"];
+  return (process.env.JWT_EXPIRES_IN ||
+    DEFAULT_TOKEN_TTL) as SignOptions["expiresIn"];
 }
 
 function getCookieMaxAge() {
   const parsed = Number(process.env.AUTH_COOKIE_MAX_AGE_MS);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_COOKIE_MAX_AGE_MS;
+  return Number.isFinite(parsed) && parsed > 0
+    ? parsed
+    : DEFAULT_COOKIE_MAX_AGE_MS;
 }
 
 function parseCookies(cookieHeader?: string | null) {
