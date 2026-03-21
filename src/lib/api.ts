@@ -46,7 +46,9 @@ export async function apiFetch(path: string, init: RequestInit = {}) {
 async function parseApiResponse<T>(response: Response): Promise<T> {
   const contentType = response.headers.get("content-type") || "";
   const isJson = contentType.includes("application/json");
-  const payload = isJson ? ((await response.json()) as T | ApiErrorPayload) : null;
+  const payload = isJson
+    ? ((await response.json()) as T | ApiErrorPayload)
+    : null;
 
   if (!response.ok) {
     const message =
@@ -76,7 +78,18 @@ type CVFeedback = {
   suggestions: string[];
 };
 
-type CVAnalysisResult = {
+export type CandidateProfilePayload = {
+  summary: string;
+  strengths: string[];
+  risks: string[];
+  likelySkills: string[];
+  seniority: string;
+  jobFitScore?: number;
+  jobFitVerdict?: "strong-fit" | "partial-fit" | "weak-fit";
+  jobFitSummary?: string;
+};
+
+export type CVAnalysisResult = {
   overallScore: number;
   feedback: CVFeedback[];
   insights?: {
@@ -84,6 +97,7 @@ type CVAnalysisResult = {
     risks: string[];
     nextSteps: string[];
   };
+  candidateProfile?: CandidateProfilePayload;
 };
 
 export type PresignedUploadPayload = {
@@ -106,7 +120,7 @@ const PRESIGN_ENDPOINTS = [
 
 export async function analyzeCV(
   file: File,
-  options?: { jobRole?: string }
+  options?: { jobRole?: string; jobDescription?: string },
 ): Promise<CVAnalysisResult> {
   try {
     const presigned = await requestCVUploadUrl(file);
@@ -129,7 +143,10 @@ export async function analyzeCV(
     if (options?.jobRole) {
       formData.append("jobRole", options.jobRole);
     }
-    const res = await apiFetch("/api/cv/analyze", {
+    if (options?.jobDescription) {
+      formData.append("jobDescription", options.jobDescription);
+    }
+    const res = await fetch(`${BASE_URL}/api/cv/analyze`, {
       method: "POST",
       body: formData,
     });
@@ -150,7 +167,8 @@ export async function analyzeCV(
         category: "Formatting & Structure",
         score: 18,
         maxScore: 25,
-        comment: "Good overall layout, but section headings could be more distinct. Consider using consistent formatting for dates.",
+        comment:
+          "Good overall layout, but section headings could be more distinct. Consider using consistent formatting for dates.",
         suggestions: [
           "Use bold section headers with clear dividers",
           "Align dates consistently to the right margin",
@@ -161,7 +179,8 @@ export async function analyzeCV(
         category: "Content & Impact",
         score: 16,
         maxScore: 25,
-        comment: "Experience descriptions are too task-focused. Lead with measurable achievements instead of responsibilities.",
+        comment:
+          "Experience descriptions are too task-focused. Lead with measurable achievements instead of responsibilities.",
         suggestions: [
           "Start bullets with action verbs (Led, Increased, Built)",
           "Add quantifiable metrics (%, $, time saved)",
@@ -172,7 +191,8 @@ export async function analyzeCV(
         category: "Keywords & ATS",
         score: 20,
         maxScore: 25,
-        comment: "Good keyword coverage for target role. Missing some emerging technologies that recruiters filter for.",
+        comment:
+          "Good keyword coverage for target role. Missing some emerging technologies that recruiters filter for.",
         suggestions: [
           "Add relevant technical skills in a dedicated section",
           "Mirror language from job descriptions you're targeting",
@@ -183,7 +203,8 @@ export async function analyzeCV(
         category: "Overall Impression",
         score: 18,
         maxScore: 25,
-        comment: "Professional but generic. Needs a stronger personal brand and clearer career narrative.",
+        comment:
+          "Professional but generic. Needs a stronger personal brand and clearer career narrative.",
         suggestions: [
           "Add a concise professional summary (2-3 lines)",
           "Tailor content to your target role",
@@ -193,17 +214,47 @@ export async function analyzeCV(
     ],
     insights: {
       strengths: ["Clear section ordering", "Good baseline keyword coverage"],
-      risks: ["Impact statements are still generic", "Summary is not role-targeted"],
+      risks: [
+        "Impact statements are still generic",
+        "Summary is not role-targeted",
+      ],
       nextSteps: [
         "Quantify your top achievements",
         "Tailor summary to your target role",
         "Add missing tools from target job descriptions",
       ],
     },
+    candidateProfile: {
+      summary:
+        "Product-minded frontend engineer with solid delivery experience, decent ATS alignment, and the biggest upside in sharper impact framing.",
+      strengths: [
+        "Frontend foundations",
+        "Structured communication",
+        "Baseline tool coverage",
+      ],
+      risks: [
+        "Limited quantified outcomes",
+        "Narrative may feel generic without tailoring",
+      ],
+      likelySkills: [
+        "React",
+        "TypeScript",
+        "JavaScript",
+        "UI collaboration",
+        "API integration",
+      ],
+      seniority: "Mid-level",
+      jobFitScore: 74,
+      jobFitVerdict: "partial-fit",
+      jobFitSummary:
+        "The candidate aligns with the core frontend scope, but the JD fit would improve with clearer evidence of measurable impact and closer keyword overlap with the target role.",
+    },
   };
 }
 
-export async function requestCVUploadUrl(file: File): Promise<PresignedUploadPayload | null> {
+export async function requestCVUploadUrl(
+  file: File,
+): Promise<PresignedUploadPayload | null> {
   for (const endpoint of PRESIGN_ENDPOINTS) {
     try {
       const response = await apiFetch(endpoint, {
@@ -221,8 +272,10 @@ export async function requestCVUploadUrl(file: File): Promise<PresignedUploadPay
       if (!response.ok) continue;
       const data = await response.json();
 
-      const uploadUrl: string | undefined = data.uploadUrl || data.presignedUrl || data.url;
-      const fileUrl: string | undefined = data.fileUrl || data.publicUrl || data.objectUrl;
+      const uploadUrl: string | undefined =
+        data.uploadUrl || data.presignedUrl || data.url;
+      const fileUrl: string | undefined =
+        data.fileUrl || data.publicUrl || data.objectUrl;
 
       if (!uploadUrl || !fileUrl) continue;
 
@@ -245,7 +298,7 @@ export async function requestCVUploadUrl(file: File): Promise<PresignedUploadPay
 export function uploadCVToPresignedUrl(
   file: File,
   config: PresignedUploadPayload,
-  onProgress?: (progress: number) => void
+  onProgress?: (progress: number) => void,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -254,7 +307,10 @@ export function uploadCVToPresignedUrl(
     xhr.open(method, config.uploadUrl, true);
 
     if (method === "PUT") {
-      xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+      xhr.setRequestHeader(
+        "Content-Type",
+        file.type || "application/octet-stream",
+      );
       Object.entries(config.headers || {}).forEach(([key, value]) => {
         xhr.setRequestHeader(key, value);
       });
@@ -293,6 +349,7 @@ export async function analyzeUploadedCV(payload: {
   key?: string;
   fileName?: string;
   jobRole?: string;
+  jobDescription?: string;
 }): Promise<CVAnalysisResult | null> {
   const endpoints = ["/api/cv/analyze-upload", "/api/cv/analyze-by-url"];
   for (const endpoint of endpoints) {
@@ -321,7 +378,7 @@ export async function getInterviewQuestions(
   count = 5,
   options?: {
     questionBrief?: string;
-  }
+  },
 ): Promise<InterviewQuestionPayload[]> {
   try {
     const briefQuery = options?.questionBrief
@@ -331,11 +388,15 @@ export async function getInterviewQuestions(
     const res = await apiFetch(endpoint, {
       method: "GET",
       cache: "no-store",
-      headers: options?.questionBrief
-        ? {
-            "x-question-brief": options.questionBrief,
-          }
-        : undefined,
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        role: jobRole,
+        type,
+        count,
+        questionBrief: options?.questionBrief,
+      }),
     });
 
     if (res.ok) {
@@ -349,7 +410,9 @@ export async function getInterviewQuestions(
     }
   } catch {
     if (type === "technical") {
-      throw new Error("Technical questions require backend OpenAI generation. Please ensure server is running and OPENAI_API_KEY is set.");
+      throw new Error(
+        "Technical questions require backend OpenAI generation. Please ensure server is running and OPENAI_API_KEY is set.",
+      );
     }
     // Fall back to local mock below when backend is unavailable.
   }
@@ -360,7 +423,8 @@ export async function getInterviewQuestions(
     const mockVoice: InterviewQuestionPayload[] = [
       {
         id: "v1",
-        question: "Tell me about yourself and why you're interested in this role.",
+        question:
+          "Tell me about yourself and why you're interested in this role.",
         category: "Introduction",
         difficulty: "easy",
         expectedPoints: [
@@ -372,7 +436,8 @@ export async function getInterviewQuestions(
       },
       {
         id: "v2",
-        question: "Describe a challenging project you worked on. What was your role and what was the outcome?",
+        question:
+          "Describe a challenging project you worked on. What was your role and what was the outcome?",
         category: "Experience",
         difficulty: "medium",
         expectedPoints: [
@@ -385,7 +450,8 @@ export async function getInterviewQuestions(
       },
       {
         id: "v3",
-        question: "How do you handle disagreements with team members about technical decisions?",
+        question:
+          "How do you handle disagreements with team members about technical decisions?",
         category: "Behavioral",
         difficulty: "medium",
         expectedPoints: [
@@ -427,7 +493,8 @@ export async function getInterviewQuestions(
   const mockTechnical: InterviewQuestionPayload[] = [
     {
       id: "t1",
-      question: "What is the difference between 'let', 'const', and 'var' in JavaScript?",
+      question:
+        "What is the difference between 'let', 'const', and 'var' in JavaScript?",
       category: "JavaScript Fundamentals",
       difficulty: "easy",
       expectedPoints: [
@@ -451,7 +518,8 @@ export async function getInterviewQuestions(
     },
     {
       id: "t3",
-      question: "What are React hooks? Explain useState and useEffect with examples.",
+      question:
+        "What are React hooks? Explain useState and useEffect with examples.",
       category: "React",
       difficulty: "medium",
       expectedPoints: [
@@ -464,7 +532,8 @@ export async function getInterviewQuestions(
     },
     {
       id: "t4",
-      question: "How would you optimize a React application that is rendering slowly?",
+      question:
+        "How would you optimize a React application that is rendering slowly?",
       category: "Performance",
       difficulty: "hard",
       expectedPoints: [
@@ -477,7 +546,8 @@ export async function getInterviewQuestions(
     },
     {
       id: "t5",
-      question: "Design a REST API for a todo application. What endpoints would you create?",
+      question:
+        "Design a REST API for a todo application. What endpoints would you create?",
       category: "System Design",
       difficulty: "medium",
       expectedPoints: [
@@ -501,7 +571,7 @@ export async function evaluateAnswer(
     question?: string;
     difficulty?: "easy" | "medium" | "hard";
     requiresCoding?: boolean;
-  }
+  },
 ): Promise<{
   score: number;
   maxScore: number;
@@ -538,12 +608,16 @@ export async function evaluateAnswer(
   }
 
   await new Promise((r) => setTimeout(r, 1500));
-  const matched = expectedPoints.slice(0, Math.ceil(expectedPoints.length * 0.6));
+  const matched = expectedPoints.slice(
+    0,
+    Math.ceil(expectedPoints.length * 0.6),
+  );
   const missed = expectedPoints.slice(Math.ceil(expectedPoints.length * 0.6));
   return {
     score: Math.round((matched.length / expectedPoints.length) * 20),
     maxScore: 20,
-    feedback: "Good answer with solid fundamentals. Try to include more specific examples and quantify impact where possible.",
+    feedback:
+      "Good answer with solid fundamentals. Try to include more specific examples and quantify impact where possible.",
     matchedPoints: matched,
     missedPoints: missed,
     reasoning: "Fallback scoring used.",
@@ -569,10 +643,7 @@ export async function signup(payload: {
   return parseApiResponse<SignupOtpResponse>(response);
 }
 
-export async function verifySignupOtp(payload: {
-  email: string;
-  otp: string;
-}) {
+export async function verifySignupOtp(payload: { email: string; otp: string }) {
   const response = await apiFetch("/api/auth/signup/verify", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -582,9 +653,7 @@ export async function verifySignupOtp(payload: {
   return parseApiResponse<AuthResponse>(response);
 }
 
-export async function resendSignupOtp(payload: {
-  email: string;
-}) {
+export async function resendSignupOtp(payload: { email: string }) {
   const response = await apiFetch("/api/auth/signup/resend", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

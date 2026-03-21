@@ -97,6 +97,13 @@ Return strict JSON:
     "strengths": ["string"],
     "risks": ["string"],
     "nextSteps": ["string"]
+  },
+  "candidateProfile": {
+    "summary": "string",
+    "strengths": ["string"],
+    "risks": ["string"],
+    "likelySkills": ["string"],
+    "seniority": "string"
   }
 }
 
@@ -115,6 +122,13 @@ Rules:
                         strengths: parsed.insights?.strengths || [],
                         risks: parsed.insights?.risks || [],
                         nextSteps: parsed.insights?.nextSteps || [],
+                    },
+                    candidateProfile: {
+                        summary: parsed.candidateProfile?.summary || "",
+                        strengths: parsed.candidateProfile?.strengths || [],
+                        risks: parsed.candidateProfile?.risks || [],
+                        likelySkills: parsed.candidateProfile?.likelySkills || [],
+                        seniority: parsed.candidateProfile?.seniority || "Unknown",
                     },
                 });
             }
@@ -176,6 +190,13 @@ Rules:
                     "Align keywords with your target job description",
                     "Add a 2-line summary focused on your role target",
                 ],
+            },
+            candidateProfile: {
+                summary: "Candidate shows relevant baseline experience for the target role, with the strongest upside coming from clearer impact framing and sharper positioning.",
+                strengths: ["Relevant domain exposure", "Structured background", "Transferable delivery skills"],
+                risks: ["Weak quantification of outcomes", "Generic positioning against the target JD"],
+                likelySkills: ["Frontend development", "Cross-functional delivery", "UI implementation", "Team collaboration"],
+                seniority: "Mid-level",
             },
         });
     }

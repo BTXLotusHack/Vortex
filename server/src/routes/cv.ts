@@ -49,6 +49,7 @@ cvRouter.post("/analyze", optionalAuth, upload.single("cv"), async (req, res) =>
   try {
     const file = req.file;
     const role = (req.body?.jobRole as string) || "General";
+    const jobDescription = (req.body?.jobDescription as string) || "";
     if (!file) {
       return res.status(400).json({ error: "No file uploaded" });
     }
@@ -101,13 +102,26 @@ Return strict JSON:
     "strengths": ["string"],
     "risks": ["string"],
     "nextSteps": ["string"]
+  },
+  "candidateProfile": {
+    "summary": "string",
+    "strengths": ["string"],
+    "risks": ["string"],
+    "likelySkills": ["string"],
+    "seniority": "string",
+    "jobFitScore": number,
+    "jobFitVerdict": "strong-fit | partial-fit | weak-fit",
+    "jobFitSummary": "string"
   }
 }
 
 Rules:
 - Use all 4 categories once each.
 - Keep suggestions concrete and tailored to this role.
-- Vary wording across runs while staying factual.`,
+- Vary wording across runs while staying factual.
+
+Relevant job description:
+${jobDescription.slice(0, 5000) || "Not provided"}`,
         },
       ]);
 
@@ -125,6 +139,16 @@ Rules:
           risks?: string[];
           nextSteps?: string[];
         };
+        candidateProfile?: {
+          summary?: string;
+          strengths?: string[];
+          risks?: string[];
+          likelySkills?: string[];
+          seniority?: string;
+          jobFitScore?: number;
+          jobFitVerdict?: "strong-fit" | "partial-fit" | "weak-fit";
+          jobFitSummary?: string;
+        };
       }>(readContentAsText(response.content));
 
       if (parsed?.feedback?.length) {
@@ -135,6 +159,16 @@ Rules:
             strengths: parsed.insights?.strengths || [],
             risks: parsed.insights?.risks || [],
             nextSteps: parsed.insights?.nextSteps || [],
+          },
+          candidateProfile: {
+            summary: parsed.candidateProfile?.summary || "",
+            strengths: parsed.candidateProfile?.strengths || [],
+            risks: parsed.candidateProfile?.risks || [],
+            likelySkills: parsed.candidateProfile?.likelySkills || [],
+            seniority: parsed.candidateProfile?.seniority || "Unknown",
+            jobFitScore: Number(parsed.candidateProfile?.jobFitScore || 0),
+            jobFitVerdict: parsed.candidateProfile?.jobFitVerdict || "partial-fit",
+            jobFitSummary: parsed.candidateProfile?.jobFitSummary || "",
           },
         });
       }
@@ -197,6 +231,18 @@ Rules:
           "Align keywords with your target job description",
           "Add a 2-line summary focused on your role target",
         ],
+      },
+      candidateProfile: {
+        summary:
+          "Candidate shows relevant baseline experience for the target role, with the strongest upside coming from clearer impact framing and sharper positioning.",
+        strengths: ["Relevant domain exposure", "Structured background", "Transferable delivery skills"],
+        risks: ["Weak quantification of outcomes", "Generic positioning against the target JD"],
+        likelySkills: ["Frontend development", "Cross-functional delivery", "UI implementation", "Team collaboration"],
+        seniority: "Mid-level",
+        jobFitScore: 72,
+        jobFitVerdict: "partial-fit",
+        jobFitSummary:
+          "The profile appears relevant to the role, but there are still some gaps between the CV evidence and the JD expectations, especially around quantified impact and direct alignment to requirements.",
       },
     });
   } catch (error) {

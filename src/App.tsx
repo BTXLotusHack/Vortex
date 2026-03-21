@@ -7,6 +7,7 @@ import { ProtectedRoute, PublicOnlyRoute } from "@/components/auth/RouteGuards";
 import { useAuthStore } from "@/stores/authStore";
 import Dashboard from "./pages/Dashboard";
 import CVScreening from "./pages/CVScreening";
+import InterviewPipeline from "./pages/InterviewPipeline";
 import VoiceInterview from "./pages/VoiceInterview";
 import TechnicalInterview from "./pages/TechnicalInterview";
 import Results from "./pages/Results";
@@ -37,10 +38,17 @@ const App = () => (
               <Route path="/register" element={<Register />} />
             </Route>
             <Route element={<ProtectedRoute />}>
+              <Route
+                path="/interview-pipeline"
+                element={<InterviewPipeline />}
+              />
               <Route path="/" element={<Dashboard />} />
               <Route path="/cv-screening" element={<CVScreening />} />
               <Route path="/voice-interview" element={<VoiceInterview />} />
-              <Route path="/technical-interview" element={<TechnicalInterview />} />
+              <Route
+                path="/technical-interview"
+                element={<TechnicalInterview />}
+              />
               <Route path="/results" element={<Results />} />
             </Route>
             <Route path="*" element={<NotFound />} />

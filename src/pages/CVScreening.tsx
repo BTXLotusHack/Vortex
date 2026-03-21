@@ -17,7 +17,18 @@ export default function CVScreening() {
   const [uploadStep, setUploadStep] = useState<"idle" | "requesting-url" | "uploading" | "analyzing">("idle");
   const [result, setResult] = useState<Awaited<ReturnType<typeof analyzeCV>> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const { addAttempt, getImprovement, currentJobRole } = useInterviewStore();
+  const {
+    addAttempt,
+    getImprovement,
+    currentJobRole,
+    currentJobDescription,
+    setJobRole,
+    setJobDescription,
+    setCandidateProfile,
+    setLatestCVAnalysis,
+    setLatestCVContext,
+    updatePipeline,
+  } = useInterviewStore();
 
   const handleFile = (f: File) => {
     if (f.type === "application/pdf" || f.name.endsWith(".pdf") || f.name.endsWith(".docx")) {
@@ -28,6 +39,14 @@ export default function CVScreening() {
 
   const handleAnalyze = async () => {
     if (!file) return;
+    if (!currentJobRole.trim()) {
+      toast.error("Add the target role before analyzing.");
+      return;
+    }
+    if (!currentJobDescription.trim()) {
+      toast.error("Paste the job description before analyzing the CV.");
+      return;
+    }
     setAnalyzing(true);
     setUploadProgress(0);
     try {
@@ -47,17 +66,24 @@ export default function CVScreening() {
           key: presigned.key,
           fileName: file.name,
           jobRole: currentJobRole,
+          jobDescription: currentJobDescription,
         });
 
         if (uploadedResult) {
           res = uploadedResult;
         } else {
           // Backend has not exposed analyze-by-url yet.
-          res = await analyzeCV(file, { jobRole: currentJobRole });
+          res = await analyzeCV(file, {
+            jobRole: currentJobRole,
+            jobDescription: currentJobDescription,
+          });
         }
       } else {
         setUploadStep("analyzing");
-        res = await analyzeCV(file, { jobRole: currentJobRole });
+        res = await analyzeCV(file, {
+          jobRole: currentJobRole,
+          jobDescription: currentJobDescription,
+        });
       }
 
       const normalizedFeedback: FeedbackItem[] = [
@@ -74,6 +100,19 @@ export default function CVScreening() {
       ];
 
       setResult(res);
+      setCandidateProfile(res.candidateProfile || null);
+      setLatestCVAnalysis({
+        overallScore: res.overallScore,
+        insights: res.insights,
+        candidateProfile: res.candidateProfile || null,
+      });
+      setLatestCVContext({ fileName: file.name, score: res.overallScore });
+      updatePipeline({
+        active: true,
+        cvUploaded: true,
+        lastCompletedStep: "cv",
+        recommendedNextStep: "voice",
+      });
       addAttempt({
         id: crypto.randomUUID(),
         module: "cv-screening",
@@ -81,6 +120,8 @@ export default function CVScreening() {
         overallScore: res.overallScore,
         maxScore: 100,
         feedback: normalizedFeedback,
+        jobRole: currentJobRole,
+        jobDescription: currentJobDescription,
       });
     } catch (e) {
       console.error(e);
@@ -106,7 +147,7 @@ export default function CVScreening() {
         <div className="mb-8 opacity-0 animate-fade-up" style={{ animationFillMode: "forwards" }}>
           <h1 className="text-2xl font-bold">CV Screening</h1>
           <p className="mt-1.5 text-muted-foreground">
-            Upload your CV and get AI-powered analysis with actionable improvement suggestions.
+            Upload your CV and compare it against the job description so the later interviews can use real fit context.
           </p>
         </div>
 
@@ -115,6 +156,30 @@ export default function CVScreening() {
             className="opacity-0 animate-fade-up"
             style={{ animationDelay: "100ms", animationFillMode: "forwards" }}
           >
+            <div className="mb-6 space-y-4 rounded-lg border bg-card p-5">
+              <div>
+                <label className="mb-1.5 block text-sm font-medium">Target Role</label>
+                <input
+                  type="text"
+                  value={currentJobRole}
+                  onChange={(e) => setJobRole(e.target.value)}
+                  className="w-full rounded-lg border bg-background px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  placeholder="e.g. Senior Backend Engineer"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-sm font-medium">Job Description</label>
+                <textarea
+                  value={currentJobDescription}
+                  onChange={(e) => setJobDescription(e.target.value)}
+                  rows={6}
+                  className="w-full rounded-lg border bg-background px-4 py-3 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+                  placeholder="Paste the job description here so CV screening can evaluate role fit and prepare later interview stages."
+                />
+              </div>
+            </div>
+
             {/* Upload area */}
             <div
               className={cn(
