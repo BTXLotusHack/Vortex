@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Conversation, type Mode, type Status } from "@elevenlabs/client";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useInterviewStore } from "@/stores/interviewStore";
+import { evaluateVoiceTranscript } from "@/lib/api";
 import {
   ArrowLeft,
   ArrowRight,
@@ -29,12 +30,16 @@ export default function VoiceInterview() {
   const [searchParams] = useSearchParams();
   const fromPipeline = searchParams.get("from") === "pipeline";
 
-  const [status, setStatus] = useState<Status>("disconnected");
+  const [status, setStatus] = useState<Status>("Disconnected");
   const [mode, setMode] = useState<Mode>("listening");
   const [messages, setMessages] = useState<TranscriptMessage[]>([]);
   const [conversationId, setConversationId] = useState("");
   const [audioLevel, setAudioLevel] = useState(0.18);
   const [markedComplete, setMarkedComplete] = useState(false);
+  const [evaluating, setEvaluating] = useState(false);
+  const [voiceResult, setVoiceResult] = useState<Awaited<
+    ReturnType<typeof evaluateVoiceTranscript>
+  > | null>(null);
 
   const conversationRef = useRef<Conversation | null>(null);
   const animationFrameRef = useRef<number | null>(null);
@@ -46,6 +51,8 @@ export default function VoiceInterview() {
     latestCVFileName,
     pipeline,
     updatePipeline,
+    addAttempt,
+    upsertPipelineRun,
   } = useInterviewStore();
 
   const interviewsUnlocked =
@@ -144,6 +151,7 @@ export default function VoiceInterview() {
       if (conversationRef.current) return;
 
       setMarkedComplete(false);
+      setVoiceResult(null);
       setMessages([]);
       setConversationId("");
 
@@ -242,15 +250,60 @@ export default function VoiceInterview() {
   };
 
   const markInterviewComplete = () => {
-    updatePipeline({
-      active: true,
-      lastCompletedStep: "voice",
-      recommendedNextStep: pipeline.technicalRequired
-        ? "technical"
-        : "complete",
-    });
-    setMarkedComplete(true);
-    toast.success("Voice interview marked as complete.");
+    if (!messages.some((message) => message.role === "user")) {
+      toast.error("Finish the interview dialogue first so it can be scored.");
+      return;
+    }
+
+    if (markedComplete) return;
+
+    setEvaluating(true);
+    void (async () => {
+      try {
+        const result = await evaluateVoiceTranscript({
+          transcript: messages.map((message) => ({
+            role: message.role,
+            message: message.message,
+          })),
+          jobRole: currentJobRole,
+          jobDescription: currentJobDescription,
+          candidateProfile,
+        });
+
+        setVoiceResult(result);
+        addAttempt({
+          id: crypto.randomUUID(),
+          module: "voice-interview",
+          date: new Date().toISOString(),
+          overallScore: result.overallScore,
+          maxScore: result.maxScore,
+          feedback: result.feedback,
+          jobRole: currentJobRole,
+          jobDescription: currentJobDescription,
+          pipelineSessionId: fromPipeline ? pipeline.currentSessionId : undefined,
+        });
+        updatePipeline({
+          active: true,
+          lastCompletedStep: "voice",
+          recommendedNextStep: pipeline.technicalRequired
+            ? "technical"
+            : "complete",
+        });
+        setMarkedComplete(true);
+        toast.success("Voice interview scored and saved.");
+        if (fromPipeline && pipeline.currentSessionId) {
+          const pipelineRun = upsertPipelineRun(pipeline.currentSessionId);
+          if (pipelineRun) {
+            navigate(`/pipeline-summary/${pipelineRun.id}`);
+          }
+        }
+      } catch (error) {
+        console.error(error);
+        toast.error("Could not score the voice interview.");
+      } finally {
+        setEvaluating(false);
+      }
+    })();
   };
 
   useEffect(() => {
@@ -325,7 +378,7 @@ export default function VoiceInterview() {
                     <p className="text-[11px] uppercase tracking-[0.26em] text-muted-foreground">
                       Live Interview
                     </p>
-                    <h2 className="mt-1 text-xl font-semibold">Talking orb</h2>
+                    <h2 className="mt-1 text-xl font-semibold">Meet Alex!</h2>
                   </div>
                   <div className="rounded-full border border-primary/10 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
                     {status}
@@ -505,25 +558,46 @@ export default function VoiceInterview() {
                     Move the pipeline forward
                   </h2>
                   <p className="mt-2 text-sm leading-7 text-muted-foreground">
-                    Once the interview is done, mark it complete here and
+                    Once the interview is done, score the dialogue here and
                     continue to the technical round if needed.
                   </p>
 
                   <div className="mt-5 space-y-3">
                     <button
                       onClick={markInterviewComplete}
+                      disabled={evaluating}
                       className={cn(
                         "flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-medium transition-all",
                         markedComplete
                           ? "bg-score-high/10 text-score-high"
                           : "bg-primary text-primary-foreground hover:bg-primary/90",
+                        evaluating && "cursor-not-allowed opacity-70",
                       )}
                     >
                       <CheckCircle2 className="h-4 w-4" />
-                      {markedComplete
-                        ? "Voice interview marked complete"
-                        : "Mark Voice Interview Complete"}
+                      {evaluating
+                        ? "Scoring Voice Interview..."
+                        : markedComplete
+                          ? "Voice interview scored and saved"
+                          : "Score and Complete Voice Interview"}
                     </button>
+
+                    {voiceResult && (
+                      <div className="rounded-2xl bg-card px-4 py-4">
+                        <p className="text-sm font-semibold">Voice summary</p>
+                        <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                          {voiceResult.overallScore}/{voiceResult.maxScore}
+                        </p>
+                        <p className="mt-3 text-sm leading-6 text-muted-foreground">
+                          Got points for:{" "}
+                          {voiceResult.summary.gainedPoints.join(", ") || "N/A"}
+                        </p>
+                        <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                          Lost points from:{" "}
+                          {voiceResult.summary.lostPoints.join(", ") || "N/A"}
+                        </p>
+                      </div>
+                    )}
 
                     {fromPipeline && pipeline.technicalRequired && (
                       <button

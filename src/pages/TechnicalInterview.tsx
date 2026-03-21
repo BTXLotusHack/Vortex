@@ -12,7 +12,7 @@ import {
   Code2,
   Clock,
 } from "lucide-react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import Editor from "@monaco-editor/react";
 import { toast } from "sonner";
@@ -20,6 +20,7 @@ import { toast } from "sonner";
 type Question = Awaited<ReturnType<typeof getInterviewQuestions>>[number];
 
 export default function TechnicalInterview() {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [stage, setStage] = useState<"setup" | "interview" | "results">(
     "setup",
@@ -53,6 +54,7 @@ export default function TechnicalInterview() {
     pipeline,
     setJobRole,
     addAttempt,
+    upsertPipelineRun,
     getImprovement,
     updatePipeline,
   } = useInterviewStore();
@@ -190,6 +192,7 @@ export default function TechnicalInterview() {
           jobRole: currentJobRole,
           jobDescription: currentJobDescription,
           duration: timer,
+          pipelineSessionId: fromPipeline ? pipeline.currentSessionId : undefined,
         });
         if (fromPipeline) {
           updatePipeline({
@@ -197,6 +200,13 @@ export default function TechnicalInterview() {
             lastCompletedStep: "technical",
             recommendedNextStep: "complete",
           });
+          if (pipeline.currentSessionId) {
+            const pipelineRun = upsertPipelineRun(pipeline.currentSessionId);
+            if (pipelineRun) {
+              navigate(`/pipeline-summary/${pipelineRun.id}`);
+              return;
+            }
+          }
         }
         setStage("results");
       }
