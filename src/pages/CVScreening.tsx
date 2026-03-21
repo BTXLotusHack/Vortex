@@ -8,6 +8,7 @@ import { Upload, FileText, Loader2, ArrowLeft } from "lucide-react";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import type { FeedbackItem } from "@/stores/interviewStore";
 
 export default function CVScreening() {
   const [file, setFile] = useState<File | null>(null);
@@ -16,7 +17,7 @@ export default function CVScreening() {
   const [uploadStep, setUploadStep] = useState<"idle" | "requesting-url" | "uploading" | "analyzing">("idle");
   const [result, setResult] = useState<Awaited<ReturnType<typeof analyzeCV>> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const { addAttempt, getImprovement } = useInterviewStore();
+  const { addAttempt, getImprovement, currentJobRole } = useInterviewStore();
 
   const handleFile = (f: File) => {
     if (f.type === "application/pdf" || f.name.endsWith(".pdf") || f.name.endsWith(".docx")) {
@@ -45,18 +46,32 @@ export default function CVScreening() {
           fileUrl: presigned.fileUrl,
           key: presigned.key,
           fileName: file.name,
+          jobRole: currentJobRole,
         });
 
         if (uploadedResult) {
           res = uploadedResult;
         } else {
           // Backend has not exposed analyze-by-url yet.
-          res = await analyzeCV(file);
+          res = await analyzeCV(file, { jobRole: currentJobRole });
         }
       } else {
         setUploadStep("analyzing");
-        res = await analyzeCV(file);
+        res = await analyzeCV(file, { jobRole: currentJobRole });
       }
+
+      const normalizedFeedback: FeedbackItem[] = [
+        ...res.feedback,
+        ...(res.insights
+          ? [{
+              category: "Process Insight",
+              score: Math.max(0, Math.min(25, Math.round(res.overallScore / 4))),
+              maxScore: 25,
+              comment: `Strengths: ${res.insights.strengths.join("; ") || "N/A"} | Risks: ${res.insights.risks.join("; ") || "N/A"}`,
+              suggestions: res.insights.nextSteps,
+            }]
+          : []),
+      ];
 
       setResult(res);
       addAttempt({
@@ -65,7 +80,7 @@ export default function CVScreening() {
         date: new Date().toISOString(),
         overallScore: res.overallScore,
         maxScore: 100,
-        feedback: res.feedback,
+        feedback: normalizedFeedback,
       });
     } catch (e) {
       console.error(e);
@@ -217,7 +232,20 @@ export default function CVScreening() {
               </div>
             </div>
 
-            <FeedbackPanel feedback={result.feedback} />
+            <FeedbackPanel
+              feedback={[
+                ...result.feedback,
+                ...(result.insights
+                  ? [{
+                      category: "Process Insight",
+                      score: Math.max(0, Math.min(25, Math.round(result.overallScore / 4))),
+                      maxScore: 25,
+                      comment: `Strengths: ${result.insights.strengths.join("; ") || "N/A"} | Risks: ${result.insights.risks.join("; ") || "N/A"}`,
+                      suggestions: result.insights.nextSteps,
+                    }]
+                  : []),
+              ]}
+            />
 
             <button
               onClick={() => { setFile(null); setResult(null); }}

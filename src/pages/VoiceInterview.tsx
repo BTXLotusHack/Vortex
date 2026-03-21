@@ -21,6 +21,7 @@ export default function VoiceInterview() {
   const [stage, setStage] = useState<"setup" | "interview" | "results">("setup");
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentQ, setCurrentQ] = useState(0);
+  const [questionCount, setQuestionCount] = useState(5);
   const [loading, setLoading] = useState(false);
   const [recording, setRecording] = useState(false);
   const [userAnswer, setUserAnswer] = useState("");
@@ -35,9 +36,10 @@ export default function VoiceInterview() {
   const audioChunksRef = useRef<Blob[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const conversationRef = useRef<Conversation | null>(null);
+  const hasCapturedRealtimeTurnRef = useRef(false);
 
   const { currentJobRole, setJobRole, addAttempt, getImprovement } = useInterviewStore();
-  const getAuthHeaders = (): Record<string, string> => ({});
+  const getAuthHeaders = useCallback((): Record<string, string> => ({}), []);
 
   const fetchConversationToken = async (): Promise<string | null> => {
     if (!API_URL) return null;
@@ -72,6 +74,7 @@ export default function VoiceInterview() {
   const startRealtimeConversation = async () => {
     try {
       if (conversationRef.current) return;
+      hasCapturedRealtimeTurnRef.current = false;
 
       await navigator.mediaDevices.getUserMedia({ audio: true });
 
@@ -94,6 +97,13 @@ export default function VoiceInterview() {
         onMessage: ({ role, message }) => {
           if (role === "user" && message.trim()) {
             setUserAnswer((prev) => (prev ? `${prev} ${message}` : message));
+
+            // Single-turn listening: stop after one captured user response.
+            if (!hasCapturedRealtimeTurnRef.current) {
+              hasCapturedRealtimeTurnRef.current = true;
+              void stopRealtimeConversation();
+              toast.info("Captured one response. Click Start Live Mic to listen again.");
+            }
           }
         },
         onError: (message) => {
@@ -272,7 +282,7 @@ export default function VoiceInterview() {
   const startInterview = async () => {
     setLoading(true);
     try {
-      const qs = await getInterviewQuestions(currentJobRole, "voice");
+      const qs = await getInterviewQuestions(currentJobRole, "voice", questionCount);
       setQuestions(qs);
       setCurrentQ(0);
       setAnswers([]);
@@ -300,7 +310,12 @@ export default function VoiceInterview() {
     setEvaluating(true);
     const q = questions[currentQ];
     try {
-      const evaluation = await evaluateAnswer(q.id, userAnswer, q.expectedPoints);
+      const evaluation = await evaluateAnswer(q.id, userAnswer, q.expectedPoints, {
+        type: "voice",
+        question: q.question,
+        difficulty: q.difficulty,
+        requiresCoding: false,
+      });
       const newAnswers = [...answers, { question: q, answer: userAnswer, evaluation }];
       setAnswers(newAnswers);
       setUserAnswer("");
@@ -315,7 +330,10 @@ export default function VoiceInterview() {
           score: a.evaluation.score,
           maxScore: a.evaluation.maxScore,
           comment: a.evaluation.feedback,
-          suggestions: a.evaluation.missedPoints.map((p: string) => `Cover: ${p}`),
+          suggestions: [
+            ...a.evaluation.missedPoints.map((p: string) => `Cover: ${p}`),
+            ...(a.evaluation.processInsight?.nextSteps || []),
+          ],
         }));
         addAttempt({
           id: crypto.randomUUID(),
@@ -340,7 +358,10 @@ export default function VoiceInterview() {
           score: a.evaluation.score,
           maxScore: a.evaluation.maxScore,
           comment: a.evaluation.feedback,
-          suggestions: a.evaluation.missedPoints.map((p: string) => `Cover: ${p}`),
+          suggestions: [
+            ...a.evaluation.missedPoints.map((p: string) => `Cover: ${p}`),
+            ...(a.evaluation.processInsight?.nextSteps || []),
+          ],
         }))
       : [];
 
@@ -374,6 +395,20 @@ export default function VoiceInterview() {
                   onChange={(e) => setJobRole(e.target.value)}
                   className="w-full rounded-lg border bg-card px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                   placeholder="e.g. Frontend Developer"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">Number of Questions</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={questionCount}
+                  onChange={(e) => setQuestionCount(Math.max(1, Math.min(10, Number(e.target.value) || 5)))}
+                  title="Number of interview questions"
+                  placeholder="5"
+                  className="w-full rounded-lg border bg-card px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 />
               </div>
 

@@ -1,6 +1,15 @@
 // API service layer — swap BASE_URL to your Node.js backend when ready
 const BASE_URL = import.meta.env.VITE_API_URL || "";
 
+type InterviewQuestionPayload = {
+  id: string;
+  question: string;
+  category: string;
+  difficulty: "easy" | "medium" | "hard";
+  expectedPoints: string[];
+  requiresCoding?: boolean;
+};
+
 type CVFeedback = {
   category: string;
   score: number;
@@ -12,6 +21,11 @@ type CVFeedback = {
 type CVAnalysisResult = {
   overallScore: number;
   feedback: CVFeedback[];
+  insights?: {
+    strengths: string[];
+    risks: string[];
+    nextSteps: string[];
+  };
 };
 
 export type PresignedUploadPayload = {
@@ -32,16 +46,10 @@ const PRESIGN_ENDPOINTS = [
 // For now, all analysis is done client-side with mock delays.
 // When your Node.js backend is running, these will call real endpoints.
 
-export async function analyzeCV(file: File): Promise<{
-  overallScore: number;
-  feedback: Array<{
-    category: string;
-    score: number;
-    maxScore: number;
-    comment: string;
-    suggestions: string[];
-  }>;
-}> {
+export async function analyzeCV(
+  file: File,
+  options?: { jobRole?: string }
+): Promise<CVAnalysisResult> {
   if (BASE_URL) {
     try {
       const presigned = await requestCVUploadUrl(file);
@@ -60,6 +68,9 @@ export async function analyzeCV(file: File): Promise<{
 
     const formData = new FormData();
     formData.append("cv", file);
+    if (options?.jobRole) {
+      formData.append("jobRole", options.jobRole);
+    }
     const res = await fetch(`${BASE_URL}/api/cv/analyze`, {
       method: "POST",
       body: formData,
@@ -117,6 +128,15 @@ export async function analyzeCV(file: File): Promise<{
         ],
       },
     ],
+    insights: {
+      strengths: ["Clear section ordering", "Good baseline keyword coverage"],
+      risks: ["Impact statements are still generic", "Summary is not role-targeted"],
+      nextSteps: [
+        "Quantify your top achievements",
+        "Tailor summary to your target role",
+        "Add missing tools from target job descriptions",
+      ],
+    },
   };
 }
 
@@ -211,6 +231,7 @@ export async function analyzeUploadedCV(payload: {
   fileUrl: string;
   key?: string;
   fileName?: string;
+  jobRole?: string;
 }): Promise<CVAnalysisResult | null> {
   if (!BASE_URL) return null;
 
@@ -237,27 +258,47 @@ export async function analyzeUploadedCV(payload: {
 
 export async function getInterviewQuestions(
   jobRole: string,
-  type: "voice" | "technical"
-): Promise<
-  Array<{
-    id: string;
-    question: string;
-    category: string;
-    difficulty: "easy" | "medium" | "hard";
-    expectedPoints: string[];
-  }>
-> {
-  if (BASE_URL) {
-    const res = await fetch(
-      `${BASE_URL}/api/interview/questions?role=${encodeURIComponent(jobRole)}&type=${type}`
-    );
-    return res.json();
+  type: "voice" | "technical",
+  count = 5,
+  options?: {
+    questionBrief?: string;
+  }
+): Promise<InterviewQuestionPayload[]> {
+  try {
+    const briefQuery = options?.questionBrief
+      ? `&brief=${encodeURIComponent(options.questionBrief)}`
+      : "";
+    const endpoint = `${BASE_URL}/api/interview/questions?role=${encodeURIComponent(jobRole)}&type=${type}&count=${count}${briefQuery}`;
+    const res = await fetch(endpoint, {
+      method: "GET",
+      cache: "no-store",
+      headers: options?.questionBrief
+        ? {
+            "x-question-brief": options.questionBrief,
+          }
+        : undefined,
+    });
+
+    if (res.ok) {
+      return res.json();
+    }
+
+    if (type === "technical") {
+      const data = await res.json().catch(() => null);
+      const message = data?.error || "Technical question generation failed.";
+      throw new Error(message);
+    }
+  } catch {
+    if (type === "technical") {
+      throw new Error("Technical questions require backend OpenAI generation. Please ensure server is running and OPENAI_API_KEY is set.");
+    }
+    // Fall back to local mock below when backend is unavailable.
   }
 
   await new Promise((r) => setTimeout(r, 1000));
 
   if (type === "voice") {
-    return [
+    const mockVoice: InterviewQuestionPayload[] = [
       {
         id: "v1",
         question: "Tell me about yourself and why you're interested in this role.",
@@ -268,6 +309,7 @@ export async function getInterviewQuestions(
           "Relevant skills",
           "Motivation for the role",
         ],
+        requiresCoding: false,
       },
       {
         id: "v2",
@@ -280,6 +322,7 @@ export async function getInterviewQuestions(
           "Measurable outcome",
           "Lessons learned",
         ],
+        requiresCoding: false,
       },
       {
         id: "v3",
@@ -292,6 +335,7 @@ export async function getInterviewQuestions(
           "Compromise and collaboration",
           "Specific example",
         ],
+        requiresCoding: false,
       },
       {
         id: "v4",
@@ -303,6 +347,7 @@ export async function getInterviewQuestions(
           "Alignment with company",
           "Continuous learning",
         ],
+        requiresCoding: false,
       },
       {
         id: "v5",
@@ -314,11 +359,13 @@ export async function getInterviewQuestions(
           "Interest in growth opportunities",
           "Genuine curiosity",
         ],
+        requiresCoding: false,
       },
     ];
+    return mockVoice.slice(0, count);
   }
 
-  return [
+  const mockTechnical: InterviewQuestionPayload[] = [
     {
       id: "t1",
       question: "What is the difference between 'let', 'const', and 'var' in JavaScript?",
@@ -329,6 +376,7 @@ export async function getInterviewQuestions(
         "Hoisting behavior",
         "Reassignment rules for const",
       ],
+      requiresCoding: false,
     },
     {
       id: "t2",
@@ -340,6 +388,7 @@ export async function getInterviewQuestions(
         "Lexical environment",
         "Practical use case (e.g., data privacy, event handlers)",
       ],
+      requiresCoding: false,
     },
     {
       id: "t3",
@@ -352,6 +401,7 @@ export async function getInterviewQuestions(
         "Dependency array behavior",
         "Cleanup functions",
       ],
+      requiresCoding: false,
     },
     {
       id: "t4",
@@ -364,6 +414,7 @@ export async function getInterviewQuestions(
         "Virtual scrolling for large lists",
         "Profiler usage",
       ],
+      requiresCoding: false,
     },
     {
       id: "t5",
@@ -376,28 +427,55 @@ export async function getInterviewQuestions(
         "Resource naming conventions",
         "Authentication considerations",
       ],
+      requiresCoding: true,
     },
   ];
+  return mockTechnical.slice(0, count);
 }
 
 export async function evaluateAnswer(
   questionId: string,
   answer: string,
-  expectedPoints: string[]
+  expectedPoints: string[],
+  options?: {
+    type?: "voice" | "technical";
+    question?: string;
+    difficulty?: "easy" | "medium" | "hard";
+    requiresCoding?: boolean;
+  }
 ): Promise<{
   score: number;
   maxScore: number;
   feedback: string;
   matchedPoints: string[];
   missedPoints: string[];
+  reasoning?: string;
+  processInsight?: {
+    strengths: string[];
+    risks: string[];
+    nextSteps: string[];
+  };
 }> {
-  if (BASE_URL) {
+  try {
     const res = await fetch(`${BASE_URL}/api/interview/evaluate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ questionId, answer, expectedPoints }),
+      body: JSON.stringify({
+        questionId,
+        answer,
+        expectedPoints,
+        type: options?.type,
+        question: options?.question,
+        difficulty: options?.difficulty,
+        requiresCoding: options?.requiresCoding,
+      }),
     });
-    return res.json();
+
+    if (res.ok) {
+      return res.json();
+    }
+  } catch {
+    // Fall back to local mock below when backend is unavailable.
   }
 
   await new Promise((r) => setTimeout(r, 1500));
@@ -409,5 +487,11 @@ export async function evaluateAnswer(
     feedback: "Good answer with solid fundamentals. Try to include more specific examples and quantify impact where possible.",
     matchedPoints: matched,
     missedPoints: missed,
+    reasoning: "Fallback scoring used.",
+    processInsight: {
+      strengths: matched.slice(0, 2),
+      risks: missed.slice(0, 2),
+      nextSteps: missed.slice(0, 2).map((item) => `Practice: ${item}`),
+    },
   };
 }

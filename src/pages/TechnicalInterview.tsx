@@ -8,6 +8,7 @@ import { ArrowLeft, Loader2, Play, ChevronRight, Code2, Clock } from "lucide-rea
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import Editor from "@monaco-editor/react";
+import { toast } from "sonner";
 
 type Question = Awaited<ReturnType<typeof getInterviewQuestions>>[number];
 
@@ -15,6 +16,8 @@ export default function TechnicalInterview() {
   const [stage, setStage] = useState<"setup" | "interview" | "results">("setup");
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentQ, setCurrentQ] = useState(0);
+  const [questionCount, setQuestionCount] = useState(5);
+  const [questionBrief, setQuestionBrief] = useState("");
   const [loading, setLoading] = useState(false);
   const [userAnswer, setUserAnswer] = useState("");
   const [codeAnswer, setCodeAnswer] = useState(
@@ -31,7 +34,13 @@ export default function TechnicalInterview() {
   const startInterview = async () => {
     setLoading(true);
     try {
-      const qs = await getInterviewQuestions(currentJobRole, "technical");
+      const qs = await getInterviewQuestions(currentJobRole, "technical", questionCount, {
+        questionBrief: questionBrief.trim() || undefined,
+      });
+      if (!qs.length) {
+        toast.error("No questions generated. Please refine your brief and try again.");
+        return;
+      }
       setQuestions(qs);
       setCurrentQ(0);
       setAnswers([]);
@@ -39,6 +48,9 @@ export default function TechnicalInterview() {
       setStage("interview");
       const interval = setInterval(() => setTimer((t) => t + 1), 1000);
       setTimerInterval(interval);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Cannot generate technical questions right now.";
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -48,19 +60,29 @@ export default function TechnicalInterview() {
     if (!userAnswer.trim() && !codeAnswer.trim()) return;
     setEvaluating(true);
     const q = questions[currentQ];
+    const requiresCoding = Boolean(q.requiresCoding);
     const composedAnswer = [
       userAnswer.trim() ? `Approach:\n${userAnswer.trim()}` : "",
-      codeAnswer.trim() ? `Code (${codeLanguage}):\n${codeAnswer.trim()}` : "",
+      requiresCoding && codeAnswer.trim() ? `Code (${codeLanguage}):\n${codeAnswer.trim()}` : "",
     ]
       .filter(Boolean)
       .join("\n\n");
 
     try {
-      const evaluation = await evaluateAnswer(q.id, composedAnswer, q.expectedPoints);
+      const evaluation = await evaluateAnswer(q.id, composedAnswer, q.expectedPoints, {
+        type: "technical",
+        question: q.question,
+        difficulty: q.difficulty,
+        requiresCoding,
+      });
       const newAnswers = [...answers, { question: q, answer: composedAnswer, evaluation }];
       setAnswers(newAnswers);
       setUserAnswer("");
-      setCodeAnswer("function solve(input) {\n  // write your solution\n  return input;\n}");
+      setCodeAnswer(
+        currentQ < questions.length - 1 && questions[currentQ + 1]?.requiresCoding
+          ? "function solve(input) {\n  // write your solution\n  return input;\n}"
+          : ""
+      );
 
       if (currentQ < questions.length - 1) {
         setCurrentQ(currentQ + 1);
@@ -73,7 +95,10 @@ export default function TechnicalInterview() {
           score: a.evaluation.score,
           maxScore: a.evaluation.maxScore,
           comment: a.evaluation.feedback,
-          suggestions: a.evaluation.missedPoints.map((p: string) => `Missing: ${p}`),
+          suggestions: [
+            ...a.evaluation.missedPoints.map((p: string) => `Missing: ${p}`),
+            ...(a.evaluation.processInsight?.nextSteps || []),
+          ],
         }));
 
         addAttempt({
@@ -106,7 +131,10 @@ export default function TechnicalInterview() {
           score: a.evaluation.score,
           maxScore: a.evaluation.maxScore,
           comment: a.evaluation.feedback,
-          suggestions: a.evaluation.missedPoints.map((p: string) => `Missing: ${p}`),
+          suggestions: [
+            ...a.evaluation.missedPoints.map((p: string) => `Missing: ${p}`),
+            ...(a.evaluation.processInsight?.nextSteps || []),
+          ],
         }))
       : [];
 
@@ -140,6 +168,32 @@ export default function TechnicalInterview() {
                   onChange={(e) => setJobRole(e.target.value)}
                   className="w-full rounded-lg border bg-card px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                   placeholder="e.g. Frontend Developer"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">Number of Questions</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={questionCount}
+                  onChange={(e) => setQuestionCount(Math.max(1, Math.min(10, Number(e.target.value) || 5)))}
+                  title="Number of interview questions"
+                  placeholder="5"
+                  className="w-full rounded-lg border bg-card px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">Question Brief (optional)</label>
+                <textarea
+                  value={questionBrief}
+                  onChange={(e) => setQuestionBrief(e.target.value)}
+                  rows={3}
+                  placeholder="Paste your required question topics here (e.g. React hooks + async race conditions + coding on debounce)."
+                  title="Custom question brief"
+                  className="w-full rounded-lg border bg-card px-4 py-2.5 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-ring resize-none"
                 />
               </div>
 
@@ -213,43 +267,53 @@ export default function TechnicalInterview() {
               className="w-full rounded-lg border bg-card px-4 py-3 text-sm font-mono leading-relaxed focus:outline-none focus:ring-2 focus:ring-ring resize-none"
             />
 
-            <div className="rounded-lg border bg-card p-3 mt-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  Live Coding Challenge
-                </span>
-                <select
-                  value={codeLanguage}
-                  onChange={(e) => setCodeLanguage(e.target.value as "javascript" | "typescript" | "python")}
-                  aria-label="Select code language"
-                  title="Select code language"
-                  className="rounded-md border bg-background px-2 py-1 text-xs"
-                >
-                  <option value="typescript">TypeScript</option>
-                  <option value="javascript">JavaScript</option>
-                  <option value="python">Python</option>
-                </select>
+            {questions[currentQ].requiresCoding ? (
+              <div className="rounded-lg border bg-card p-3 mt-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                    Live Coding Challenge
+                  </span>
+                  <select
+                    value={codeLanguage}
+                    onChange={(e) => setCodeLanguage(e.target.value as "javascript" | "typescript" | "python")}
+                    aria-label="Select code language"
+                    title="Select code language"
+                    className="rounded-md border bg-background px-2 py-1 text-xs"
+                  >
+                    <option value="typescript">TypeScript</option>
+                    <option value="javascript">JavaScript</option>
+                    <option value="python">Python</option>
+                  </select>
+                </div>
+                <Editor
+                  height="320px"
+                  language={codeLanguage}
+                  theme="light"
+                  value={codeAnswer}
+                  onChange={(value) => setCodeAnswer(value || "")}
+                  options={{
+                    minimap: { enabled: false },
+                    fontSize: 14,
+                    wordWrap: "on",
+                    lineNumbers: "on",
+                    scrollBeyondLastLine: false,
+                    automaticLayout: true,
+                  }}
+                />
               </div>
-              <Editor
-                height="320px"
-                language={codeLanguage}
-                theme="light"
-                value={codeAnswer}
-                onChange={(value) => setCodeAnswer(value || "")}
-                options={{
-                  minimap: { enabled: false },
-                  fontSize: 14,
-                  wordWrap: "on",
-                  lineNumbers: "on",
-                  scrollBeyondLastLine: false,
-                  automaticLayout: true,
-                }}
-              />
-            </div>
+            ) : (
+              <div className="mt-4 rounded-lg border bg-card px-4 py-3 text-sm text-muted-foreground">
+                This question focuses on reasoning. Monaco editor is hidden because coding is not required.
+              </div>
+            )}
 
             <button
               onClick={submitAnswer}
-              disabled={(!userAnswer.trim() && !codeAnswer.trim()) || evaluating}
+              disabled={
+                evaluating ||
+                (!questions[currentQ].requiresCoding && !userAnswer.trim()) ||
+                (questions[currentQ].requiresCoding && !userAnswer.trim() && !codeAnswer.trim())
+              }
               className={cn(
                 "mt-4 w-full flex items-center justify-center gap-2 rounded-lg px-6 py-3",
                 "bg-primary text-primary-foreground font-medium text-sm",

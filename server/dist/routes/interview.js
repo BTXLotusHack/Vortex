@@ -1,57 +1,219 @@
 import { Router } from "express";
 import { optionalAuth } from "../middleware/auth.js";
+import { ChatOpenAI } from "@langchain/openai";
 export const interviewRouter = Router();
+function clampQuestionCount(input, fallback = 5) {
+    const parsed = Number(input);
+    if (!Number.isFinite(parsed))
+        return fallback;
+    return Math.min(10, Math.max(1, Math.floor(parsed)));
+}
+function randomId(prefix) {
+    return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+function readContentAsText(content) {
+    if (typeof content === "string")
+        return content;
+    if (!Array.isArray(content))
+        return "";
+    return content
+        .map((item) => {
+        if (typeof item === "string")
+            return item;
+        if (item && typeof item === "object" && "text" in item && typeof item.text === "string") {
+            return item.text;
+        }
+        return "";
+    })
+        .join("");
+}
+function parseJsonText(raw) {
+    if (!raw.trim())
+        return null;
+    const cleaned = raw
+        .trim()
+        .replace(/^```json\s*/i, "")
+        .replace(/^```\s*/i, "")
+        .replace(/```$/i, "")
+        .trim();
+    try {
+        return JSON.parse(cleaned);
+    }
+    catch {
+        return null;
+    }
+}
+function normalizeDifficulty(input) {
+    if (input === "easy" || input === "hard")
+        return input;
+    return "medium";
+}
+function buildFallbackQuestions(type, count) {
+    const voice = [
+        {
+            id: randomId("v"),
+            question: "Tell me about a time you had to explain a difficult technical topic to a non-technical stakeholder.",
+            category: "Communication",
+            difficulty: "medium",
+            expectedPoints: ["Context", "How you simplified", "Outcome", "What you learned"],
+            requiresCoding: false,
+        },
+        {
+            id: randomId("v"),
+            question: "Describe a production incident you handled and your communication flow with the team.",
+            category: "Behavioral",
+            difficulty: "hard",
+            expectedPoints: ["Situation", "Your actions", "Collaboration", "Result"],
+            requiresCoding: false,
+        },
+        {
+            id: randomId("v"),
+            question: "How do you prioritize when multiple urgent tasks arrive at once?",
+            category: "Prioritization",
+            difficulty: "medium",
+            expectedPoints: ["Framework", "Trade-offs", "Stakeholder communication"],
+            requiresCoding: false,
+        },
+    ];
+    const technical = [
+        {
+            id: randomId("t"),
+            question: "Explain event loop behavior in JavaScript and how it affects async performance.",
+            category: "Fundamentals",
+            difficulty: "medium",
+            expectedPoints: ["Call stack", "Task queues", "Microtask vs macrotask", "Practical impact"],
+            requiresCoding: false,
+        },
+        {
+            id: randomId("t"),
+            question: "Implement a function to group an array of objects by a given key.",
+            category: "Coding",
+            difficulty: "easy",
+            expectedPoints: ["Correct grouping", "Edge cases", "Readable code"],
+            requiresCoding: true,
+        },
+        {
+            id: randomId("t"),
+            question: "Design an API cache invalidation strategy for frequently updated resources.",
+            category: "System Design",
+            difficulty: "hard",
+            expectedPoints: ["TTL strategy", "Invalidation trigger", "Consistency trade-off", "Monitoring"],
+            requiresCoding: false,
+        },
+    ];
+    const source = type === "voice" ? voice : technical;
+    const out = [];
+    for (let i = 0; i < count; i += 1) {
+        const picked = source[i % source.length];
+        out.push({ ...picked, id: randomId(type === "voice" ? "v" : "t") });
+    }
+    return out;
+}
+async function generateQuestionsWithAI(role, type, count, questionBrief) {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey)
+        return buildFallbackQuestions(type, count);
+    const model = process.env.OPENAI_CHAT_MODEL || "gpt-4o-mini";
+    const llm = new ChatOpenAI({ apiKey, model, temperature: 0.9 });
+    const nonce = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const prompt = `Create ${count} unique ${type} interview questions for role "${role}".
+Randomization seed: ${nonce}
+Custom candidate requirements: ${questionBrief || "None"}
+
+Return STRICT JSON object with shape:
+{
+  "questions": [
+    {
+      "id": "string",
+      "question": "string",
+      "category": "string",
+      "difficulty": "easy|medium|hard",
+      "expectedPoints": ["string", "string", "string"],
+      "requiresCoding": boolean
+    }
+  ]
+}
+
+Rules:
+- Exactly ${count} questions.
+- Voice interview: behavioral/communication/situational, requiresCoding must be false.
+- Technical interview: mix of conceptual + coding; only coding questions set requiresCoding=true.
+- expectedPoints must have 3-5 concrete criteria.
+- Make this set different from typical templates.`;
+    const response = await llm.invoke([
+        {
+            role: "system",
+            content: "You are a senior interviewer creating varied, realistic interview questions. Return only JSON.",
+        },
+        { role: "user", content: prompt },
+    ]);
+    const parsed = parseJsonText(readContentAsText(response.content));
+    const questions = Array.isArray(parsed?.questions) ? parsed?.questions : [];
+    if (!questions.length) {
+        return buildFallbackQuestions(type, count);
+    }
+    return questions.slice(0, count).map((q, idx) => ({
+        id: q.id || randomId(type === "voice" ? "v" : "t"),
+        question: q.question,
+        category: q.category || (type === "voice" ? "Behavioral" : "Technical"),
+        difficulty: normalizeDifficulty(q.difficulty),
+        expectedPoints: Array.isArray(q.expectedPoints) && q.expectedPoints.length
+            ? q.expectedPoints.slice(0, 5)
+            : ["Clear structure", "Technical correctness", "Practical relevance"],
+        requiresCoding: type === "technical" ? Boolean(q.requiresCoding) : false,
+    })).map((q, idx) => ({ ...q, id: q.id || `${type}-${idx + 1}` }));
+}
+async function evaluateWithAI(payload) {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey)
+        return null;
+    const model = process.env.OPENAI_CHAT_MODEL || "gpt-4o-mini";
+    const llm = new ChatOpenAI({ apiKey, model, temperature: 0.2 });
+    const response = await llm.invoke([
+        {
+            role: "system",
+            content: "You are an expert interviewer. Evaluate answers with objective scoring and actionable coaching. Return only JSON.",
+        },
+        {
+            role: "user",
+            content: `Evaluate this ${payload.type} answer.
+
+Question: ${payload.question}
+Difficulty: ${payload.difficulty || "medium"}
+Requires coding: ${payload.requiresCoding ? "yes" : "no"}
+Expected points: ${JSON.stringify(payload.expectedPoints)}
+Candidate answer:\n${payload.answer}
+
+Return strict JSON:
+{
+  "score": number,
+  "maxScore": 20,
+  "feedback": "string",
+  "matchedPoints": ["string"],
+  "missedPoints": ["string"],
+  "reasoning": "string",
+  "processInsight": {
+    "strengths": ["string"],
+    "risks": ["string"],
+    "nextSteps": ["string"]
+  }
+}`,
+        },
+    ]);
+    return parseJsonText(readContentAsText(response.content));
+}
 // Get interview questions
 interviewRouter.get("/questions", optionalAuth, async (req, res) => {
     try {
         const role = req.query.role || "Frontend Developer";
-        const type = req.query.type || "voice";
-        const apiKey = process.env.OPENAI_API_KEY;
-        if (apiKey) {
-            const { default: OpenAI } = await import("openai");
-            const openai = new OpenAI({ apiKey });
-            const completion = await openai.chat.completions.create({
-                model: "gpt-4o-mini",
-                messages: [
-                    {
-                        role: "system",
-                        content: `Generate 5 ${type} interview questions for a "${role}" position. Return JSON array:
-[{
-  "id": "<unique-id>",
-  "question": "<question text>",
-  "category": "<category>",
-  "difficulty": "easy" | "medium" | "hard",
-  "expectedPoints": ["<key point 1>", "<key point 2>", ...]
-}]
-
-For voice: behavioral, situational, cultural-fit questions.
-For technical: coding, system design, fundamentals questions.
-Return only valid JSON array.`,
-                    },
-                ],
-                response_format: { type: "json_object" },
-            });
-            const parsed = JSON.parse(completion.choices[0].message.content || "{}");
-            const questions = parsed.questions || parsed;
-            return res.json(Array.isArray(questions) ? questions : []);
-        }
-        // Fallback: mock questions
-        if (type === "voice") {
-            return res.json([
-                { id: "v1", question: "Tell me about yourself and why you're interested in this role.", category: "Introduction", difficulty: "easy", expectedPoints: ["Brief professional background", "Relevant skills", "Motivation for the role"] },
-                { id: "v2", question: "Describe a challenging project you worked on. What was your role and what was the outcome?", category: "Experience", difficulty: "medium", expectedPoints: ["Clear problem statement", "Your specific contribution", "Measurable outcome", "Lessons learned"] },
-                { id: "v3", question: "How do you handle disagreements with team members about technical decisions?", category: "Behavioral", difficulty: "medium", expectedPoints: ["Active listening", "Data-driven approach", "Compromise and collaboration", "Specific example"] },
-                { id: "v4", question: "Where do you see yourself in three years?", category: "Career Goals", difficulty: "easy", expectedPoints: ["Growth trajectory", "Alignment with company", "Continuous learning"] },
-                { id: "v5", question: "Do you have any questions for us?", category: "Engagement", difficulty: "easy", expectedPoints: ["Thoughtful questions about team/culture", "Interest in growth opportunities", "Genuine curiosity"] },
-            ]);
-        }
-        return res.json([
-            { id: "t1", question: "What is the difference between 'let', 'const', and 'var' in JavaScript?", category: "JavaScript Fundamentals", difficulty: "easy", expectedPoints: ["Block scoping vs function scoping", "Hoisting behavior", "Reassignment rules for const"] },
-            { id: "t2", question: "Explain the concept of closures and give a practical example.", category: "JavaScript Fundamentals", difficulty: "medium", expectedPoints: ["Function retaining access to outer scope", "Lexical environment", "Practical use case"] },
-            { id: "t3", question: "What are React hooks? Explain useState and useEffect with examples.", category: "React", difficulty: "medium", expectedPoints: ["State management without classes", "Side effect handling", "Dependency array behavior", "Cleanup functions"] },
-            { id: "t4", question: "How would you optimize a React application that is rendering slowly?", category: "Performance", difficulty: "hard", expectedPoints: ["React.memo / useMemo / useCallback", "Code splitting and lazy loading", "Virtual scrolling", "Profiler usage"] },
-            { id: "t5", question: "Design a REST API for a todo application. What endpoints would you create?", category: "System Design", difficulty: "medium", expectedPoints: ["CRUD operations mapping to HTTP methods", "Proper status codes", "Resource naming conventions", "Authentication considerations"] },
-        ]);
+        const rawType = req.query.type || "voice";
+        const type = rawType === "technical" ? "technical" : "voice";
+        const count = clampQuestionCount(req.query.count, 5);
+        const questionBriefHeader = req.header("x-question-brief");
+        const questionBriefQuery = req.query.brief;
+        const questionBrief = (questionBriefHeader || questionBriefQuery || "").trim() || undefined;
+        const questions = await generateQuestionsWithAI(role, type, count, questionBrief);
+        return res.json(questions);
     }
     catch (error) {
         console.error("Questions error:", error);
@@ -61,43 +223,50 @@ Return only valid JSON array.`,
 // Evaluate an answer
 interviewRouter.post("/evaluate", optionalAuth, async (req, res) => {
     try {
-        const { questionId, answer, expectedPoints } = req.body;
-        const apiKey = process.env.OPENAI_API_KEY;
-        if (apiKey && answer) {
-            const { default: OpenAI } = await import("openai");
-            const openai = new OpenAI({ apiKey });
-            const completion = await openai.chat.completions.create({
-                model: "gpt-4o-mini",
-                messages: [
-                    {
-                        role: "system",
-                        content: `Evaluate this interview answer. Expected points: ${JSON.stringify(expectedPoints)}.
-Return JSON:
-{
-  "score": <0-20>,
-  "maxScore": 20,
-  "feedback": "<constructive feedback>",
-  "matchedPoints": ["<matched point>", ...],
-  "missedPoints": ["<missed point>", ...]
-}
-Be fair but thorough. Return only valid JSON.`,
-                    },
-                    { role: "user", content: answer },
-                ],
-                response_format: { type: "json_object" },
-            });
-            const result = JSON.parse(completion.choices[0].message.content || "{}");
-            return res.json(result);
+        const { answer, expectedPoints = [], type = "voice", question = "", difficulty, requiresCoding, } = req.body;
+        const safePoints = Array.isArray(expectedPoints) ? expectedPoints : [];
+        if (!answer || !answer.trim()) {
+            return res.status(400).json({ error: "Answer is required" });
         }
-        // Fallback mock
-        const matched = expectedPoints.slice(0, Math.ceil(expectedPoints.length * 0.6));
-        const missed = expectedPoints.slice(Math.ceil(expectedPoints.length * 0.6));
+        const ai = await evaluateWithAI({
+            type: type === "technical" ? "technical" : "voice",
+            question,
+            answer,
+            expectedPoints: safePoints,
+            difficulty,
+            requiresCoding,
+        });
+        if (ai) {
+            const maxScore = 20;
+            const clampedScore = Math.min(maxScore, Math.max(0, Math.round(Number(ai.score || 0))));
+            return res.json({
+                score: clampedScore,
+                maxScore,
+                feedback: ai.feedback || "Good effort. Keep refining your structure and detail.",
+                matchedPoints: Array.isArray(ai.matchedPoints) ? ai.matchedPoints : [],
+                missedPoints: Array.isArray(ai.missedPoints) ? ai.missedPoints : [],
+                reasoning: ai.reasoning || "Reasoning unavailable.",
+                processInsight: {
+                    strengths: ai.processInsight?.strengths || [],
+                    risks: ai.processInsight?.risks || [],
+                    nextSteps: ai.processInsight?.nextSteps || [],
+                },
+            });
+        }
+        const matched = safePoints.slice(0, Math.ceil(safePoints.length * 0.6));
+        const missed = safePoints.slice(Math.ceil(safePoints.length * 0.6));
         return res.json({
-            score: Math.round((matched.length / expectedPoints.length) * 20),
+            score: safePoints.length ? Math.round((matched.length / safePoints.length) * 20) : 12,
             maxScore: 20,
             feedback: "Good answer with solid fundamentals. Try to include more specific examples.",
             matchedPoints: matched,
             missedPoints: missed,
+            reasoning: "Fallback evaluation used because AI evaluator is unavailable.",
+            processInsight: {
+                strengths: matched.slice(0, 2),
+                risks: missed.slice(0, 2),
+                nextSteps: missed.slice(0, 2).map((item) => `Practice: ${item}`),
+            },
         });
     }
     catch (error) {

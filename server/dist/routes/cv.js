@@ -1,7 +1,40 @@
 import { Router } from "express";
 import multer from "multer";
 import { optionalAuth } from "../middleware/auth.js";
+import { ChatOpenAI } from "@langchain/openai";
 export const cvRouter = Router();
+function readContentAsText(content) {
+    if (typeof content === "string")
+        return content;
+    if (!Array.isArray(content))
+        return "";
+    return content
+        .map((item) => {
+        if (typeof item === "string")
+            return item;
+        if (item && typeof item === "object" && "text" in item && typeof item.text === "string") {
+            return item.text;
+        }
+        return "";
+    })
+        .join("");
+}
+function parseJsonText(raw) {
+    if (!raw.trim())
+        return null;
+    const cleaned = raw
+        .trim()
+        .replace(/^```json\s*/i, "")
+        .replace(/^```\s*/i, "")
+        .replace(/```$/i, "")
+        .trim();
+    try {
+        return JSON.parse(cleaned);
+    }
+    catch {
+        return null;
+    }
+}
 const upload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
@@ -13,14 +46,18 @@ const upload = multer({
 cvRouter.post("/analyze", optionalAuth, upload.single("cv"), async (req, res) => {
     try {
         const file = req.file;
+        const role = req.body?.jobRole || "General";
         if (!file) {
             return res.status(400).json({ error: "No file uploaded" });
         }
         // If OpenAI is configured, use it for real analysis
         const apiKey = process.env.OPENAI_API_KEY;
         if (apiKey) {
-            const { default: OpenAI } = await import("openai");
-            const openai = new OpenAI({ apiKey });
+            const llm = new ChatOpenAI({
+                apiKey,
+                model: process.env.OPENAI_CHAT_MODEL || "gpt-4o-mini",
+                temperature: 0.7,
+            });
             // Extract text from PDF
             let text = "";
             if (file.mimetype === "application/pdf") {
@@ -31,34 +68,56 @@ cvRouter.post("/analyze", optionalAuth, upload.single("cv"), async (req, res) =>
             else {
                 text = file.buffer.toString("utf-8");
             }
-            const completion = await openai.chat.completions.create({
-                model: "gpt-4o-mini",
-                messages: [
-                    {
-                        role: "system",
-                        content: `You are an expert CV reviewer. Analyze the CV and return a JSON response with:
+            const nonce = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+            const response = await llm.invoke([
+                {
+                    role: "system",
+                    content: "You are an expert CV reviewer and hiring coach. Return only JSON.",
+                },
+                {
+                    role: "user",
+                    content: `Analyze this CV for target role "${role}".
+Randomization seed: ${nonce}
+
+CV text:\n${text.slice(0, 7000)}
+
+Return strict JSON:
 {
-  "overallScore": <number 0-100>,
+  "overallScore": number,
   "feedback": [
     {
-      "category": "<category name>",
-      "score": <number 0-25>,
+      "category": "Formatting & Structure | Content & Impact | Keywords & ATS | Overall Impression",
+      "score": number,
       "maxScore": 25,
-      "comment": "<detailed feedback>",
-      "suggestions": ["<suggestion 1>", "<suggestion 2>", "<suggestion 3>"]
+      "comment": "string",
+      "suggestions": ["string", "string", "string"]
     }
-  ]
+  ],
+  "insights": {
+    "strengths": ["string"],
+    "risks": ["string"],
+    "nextSteps": ["string"]
+  }
 }
 
-Categories: "Formatting & Structure", "Content & Impact", "Keywords & ATS", "Overall Impression".
-Be specific and actionable. Return only valid JSON.`,
+Rules:
+- Use all 4 categories once each.
+- Keep suggestions concrete and tailored to this role.
+- Vary wording across runs while staying factual.`,
+                },
+            ]);
+            const parsed = parseJsonText(readContentAsText(response.content));
+            if (parsed?.feedback?.length) {
+                return res.json({
+                    overallScore: Math.min(100, Math.max(0, Math.round(Number(parsed.overallScore ?? 70)))),
+                    feedback: parsed.feedback,
+                    insights: {
+                        strengths: parsed.insights?.strengths || [],
+                        risks: parsed.insights?.risks || [],
+                        nextSteps: parsed.insights?.nextSteps || [],
                     },
-                    { role: "user", content: `Analyze this CV:\n\n${text.slice(0, 6000)}` },
-                ],
-                response_format: { type: "json_object" },
-            });
-            const result = JSON.parse(completion.choices[0].message.content || "{}");
-            return res.json(result);
+                });
+            }
         }
         // Fallback: mock analysis
         return res.json({
@@ -109,6 +168,15 @@ Be specific and actionable. Return only valid JSON.`,
                     ],
                 },
             ],
+            insights: {
+                strengths: ["Readable overall structure", "Relevant domain experience present"],
+                risks: ["Achievements are not quantified", "Skill positioning is too generic"],
+                nextSteps: [
+                    "Rewrite top 3 bullets with measurable outcomes",
+                    "Align keywords with your target job description",
+                    "Add a 2-line summary focused on your role target",
+                ],
+            },
         });
     }
     catch (error) {

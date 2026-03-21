@@ -4,6 +4,8 @@ import path from "path";
 import { componentTagger } from "lovable-tagger";
 import { VitePWA } from "vite-plugin-pwa";
 
+const API_TARGET = process.env.VITE_API_URL || "http://localhost:3000";
+
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
   server: {
@@ -11,6 +13,12 @@ export default defineConfig(({ mode }) => ({
     port: 8000,
     hmr: {
       overlay: false,
+    },
+    proxy: {
+      "/api": {
+        target: API_TARGET,
+        changeOrigin: true,
+      },
     },
   },
   plugins: [
