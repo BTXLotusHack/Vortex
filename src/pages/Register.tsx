@@ -2,18 +2,25 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { Label } from "@/components/ui/label";
 import { useAuthStore } from "@/stores/authStore";
 import { toast } from "sonner";
-import { Loader2, ArrowRight } from "lucide-react";
+import { Loader2, ArrowRight, MailCheck } from "lucide-react";
 
 export default function Register() {
   const navigate = useNavigate();
   const signup = useAuthStore((state) => state.signup);
+  const verifySignupOtp = useAuthStore((state) => state.verifySignupOtp);
+  const resendSignupOtp = useAuthStore((state) => state.resendSignupOtp);
+  const pendingSignup = useAuthStore((state) => state.pendingSignup);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [resending, setResending] = useState(false);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,14 +31,51 @@ export default function Register() {
 
     setLoading(true);
     try {
-      await signup({ name, email, password });
-      navigate("/", { replace: true });
+      const result = await signup({ name, email, password });
+      setEmail(result.email);
+      toast.success("OTP has been sent to your email.");
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Unable to create account.";
       toast.error(message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setOtpLoading(true);
+    try {
+      await verifySignupOtp({
+        email: pendingSignup?.email || email,
+        otp,
+      });
+      toast.success("Account created successfully.");
+      navigate("/", { replace: true });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Invalid or expired OTP.";
+      toast.error(message);
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    const targetEmail = pendingSignup?.email || email;
+    if (!targetEmail) return;
+
+    setResending(true);
+    try {
+      await resendSignupOtp({ email: targetEmail });
+      toast.success("OTP has been sent again.");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unable to resend OTP.";
+      toast.error(message);
+    } finally {
+      setResending(false);
     }
   };
 
@@ -65,23 +109,81 @@ export default function Register() {
           className="surface-glass w-full max-w-md rounded-[2rem] border border-white/45 p-7 opacity-0 animate-fade-up md:p-8"
           style={{ animationFillMode: "forwards" }}
         >
-          <>
-            <div className="mb-8">
-              <div className="mb-6 flex items-center gap-2 lg:hidden">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary">
-                  <span className="font-display text-lg text-primary-foreground">V</span>
-                </div>
-                <span className="font-display text-xl">VORTEX</span>
+          <div className="mb-8">
+            <div className="mb-6 flex items-center gap-2 lg:hidden">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary">
+                <span className="font-display text-lg text-primary-foreground">V</span>
               </div>
-              <div className="mb-3 text-[11px] uppercase tracking-[0.28em] text-primary">
-                Get started
-              </div>
-              <h1 className="font-display text-4xl leading-none">Create your account</h1>
-              <p className="mt-3 text-sm leading-7 text-muted-foreground">
-                Start your interview prep journey with a cleaner, more premium workspace.
-              </p>
+              <span className="font-display text-xl">VORTEX</span>
             </div>
+            <div className="mb-3 text-[11px] uppercase tracking-[0.28em] text-primary">
+              {pendingSignup ? "Verify email" : "Get started"}
+            </div>
+            <h1 className="font-display text-4xl leading-none">
+              {pendingSignup ? "Enter OTP code" : "Create your account"}
+            </h1>
+            <p className="mt-3 text-sm leading-7 text-muted-foreground">
+              {pendingSignup
+                ? `We sent a 6-digit OTP to ${pendingSignup.email}. Enter it below to complete account creation.`
+                : "Start your interview prep journey with a cleaner, more premium workspace."}
+            </p>
+          </div>
 
+          {pendingSignup ? (
+            <form onSubmit={handleVerifyOtp} className="space-y-4">
+              <div className="rounded-2xl border border-primary/15 bg-white/40 px-4 py-3 text-sm text-muted-foreground">
+                <div className="mb-2 flex items-center gap-2 text-foreground">
+                  <MailCheck className="h-4 w-4 text-primary" />
+                  Verification in progress
+                </div>
+                Check your inbox for the OTP email, then enter the code here.
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="otp">OTP code</Label>
+                <InputOTP
+                  id="otp"
+                  maxLength={6}
+                  pattern="[0-9]*"
+                  value={otp}
+                  onChange={(value) => setOtp(value.replace(/\D/g, "").slice(0, 6))}
+                  required
+                  autoComplete="one-time-code"
+                  containerClassName="justify-center"
+                >
+                  <InputOTPGroup>
+                    {Array.from({ length: 6 }).map((_, index) => (
+                      <InputOTPSlot
+                        key={index}
+                        index={index}
+                        className="h-12 w-12 rounded-xl border border-white/40 bg-white/55 text-base font-semibold backdrop-blur"
+                      />
+                    ))}
+                  </InputOTPGroup>
+                </InputOTP>
+              </div>
+
+              <Button type="submit" className="w-full" disabled={otpLoading || otp.length !== 6}>
+                {otpLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <>
+                    Verify OTP <ArrowRight className="h-4 w-4" />
+                  </>
+                )}
+              </Button>
+
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={handleResendOtp}
+                disabled={resending}
+              >
+                {resending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Resend OTP"}
+              </Button>
+            </form>
+          ) : (
             <form onSubmit={handleRegister} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="name">Full name</Label>
@@ -126,19 +228,19 @@ export default function Register() {
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <>
-                    Create account <ArrowRight className="h-4 w-4" />
+                    Send OTP <ArrowRight className="h-4 w-4" />
                   </>
                 )}
               </Button>
             </form>
+          )}
 
-            <p className="mt-6 text-center text-sm text-muted-foreground">
-              Already have an account?{" "}
-              <Link to="/login" className="font-medium text-primary hover:underline">
-                Sign in
-              </Link>
-            </p>
-          </>
+          <p className="mt-6 text-center text-sm text-muted-foreground">
+            Already have an account?{" "}
+            <Link to="/login" className="font-medium text-primary hover:underline">
+              Sign in
+            </Link>
+          </p>
         </div>
       </div>
     </div>

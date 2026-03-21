@@ -39,6 +39,24 @@ export function validateSignupInput(input) {
     }
     return { name, email, password };
 }
+export function validateSignupOtpInput(input) {
+    const email = typeof input.email === "string" ? normalizeEmail(input.email) : "";
+    const otp = typeof input.otp === "string" ? input.otp.trim() : "";
+    if (!EMAIL_REGEX.test(email)) {
+        throw new AuthValidationError("Please provide a valid email address.");
+    }
+    if (!/^\d{6}$/.test(otp)) {
+        throw new AuthValidationError("Please provide a valid 6-digit OTP.");
+    }
+    return { email, otp };
+}
+export function validateSignupEmailInput(input) {
+    const email = typeof input.email === "string" ? normalizeEmail(input.email) : "";
+    if (!EMAIL_REGEX.test(email)) {
+        throw new AuthValidationError("Please provide a valid email address.");
+    }
+    return { email };
+}
 export function validateLoginInput(input) {
     const email = typeof input.email === "string" ? normalizeEmail(input.email) : "";
     const password = typeof input.password === "string" ? input.password : "";
@@ -47,25 +65,27 @@ export function validateLoginInput(input) {
     }
     return { email, password };
 }
-export async function createUserAccount(input) {
+async function findUserByEmail(email) {
     const existing = await query(`
       SELECT id, email, name, avatar, password_hash
       FROM users
       WHERE LOWER(email) = LOWER($1)
       LIMIT 1;
-    `, [input.email]);
-    const existingUser = existing.rows[0];
+    `, [email]);
+    return existing.rows[0] || null;
+}
+export async function createOrActivateUserAccount(input) {
+    const existingUser = await findUserByEmail(input.email);
     if (existingUser?.password_hash) {
         throw new AuthConflictError("Unable to create account.");
     }
-    const passwordHash = await bcrypt.hash(input.password, SALT_ROUNDS);
     if (existingUser) {
         const updated = await query(`
         UPDATE users
         SET name = $1, password_hash = $2
         WHERE id = $3
         RETURNING id, email, name, avatar;
-      `, [input.name, passwordHash, existingUser.id]);
+      `, [input.name, input.passwordHash, existingUser.id]);
         return updated.rows[0];
     }
     try {
@@ -73,7 +93,7 @@ export async function createUserAccount(input) {
         INSERT INTO users (id, email, name, password_hash)
         VALUES ($1, $2, $3, $4)
         RETURNING id, email, name, avatar;
-      `, [randomUUID(), input.email, input.name, passwordHash]);
+      `, [randomUUID(), input.email, input.name, input.passwordHash]);
         return result.rows[0];
     }
     catch (error) {
@@ -82,6 +102,14 @@ export async function createUserAccount(input) {
         }
         throw error;
     }
+}
+export async function createUserAccount(input) {
+    const passwordHash = await bcrypt.hash(input.password, SALT_ROUNDS);
+    return createOrActivateUserAccount({
+        name: input.name,
+        email: input.email,
+        passwordHash,
+    });
 }
 export async function authenticateUser(input) {
     const result = await query(`

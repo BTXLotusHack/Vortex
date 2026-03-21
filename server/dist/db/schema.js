@@ -23,6 +23,17 @@ export async function initializeSchema() {
     await query("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;");
     await query("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_lower ON users (LOWER(email));");
     await query(`
+    CREATE TABLE IF NOT EXISTS signup_verifications (
+      email TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      password_hash TEXT NOT NULL,
+      otp_hash TEXT NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+    await query("CREATE UNIQUE INDEX IF NOT EXISTS idx_signup_verifications_email_lower ON signup_verifications (LOWER(email));");
+    await query(`
     CREATE TABLE IF NOT EXISTS sessions (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

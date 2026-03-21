@@ -56,6 +56,31 @@ export function validateSignupInput(input: { name?: unknown; email?: unknown; pa
   return { name, email, password };
 }
 
+export function validateSignupOtpInput(input: { email?: unknown; otp?: unknown }) {
+  const email = typeof input.email === "string" ? normalizeEmail(input.email) : "";
+  const otp = typeof input.otp === "string" ? input.otp.trim() : "";
+
+  if (!EMAIL_REGEX.test(email)) {
+    throw new AuthValidationError("Please provide a valid email address.");
+  }
+
+  if (!/^\d{6}$/.test(otp)) {
+    throw new AuthValidationError("Please provide a valid 6-digit OTP.");
+  }
+
+  return { email, otp };
+}
+
+export function validateSignupEmailInput(input: { email?: unknown }) {
+  const email = typeof input.email === "string" ? normalizeEmail(input.email) : "";
+
+  if (!EMAIL_REGEX.test(email)) {
+    throw new AuthValidationError("Please provide a valid email address.");
+  }
+
+  return { email };
+}
+
 export function validateLoginInput(input: { email?: unknown; password?: unknown }) {
   const email = typeof input.email === "string" ? normalizeEmail(input.email) : "";
   const password = typeof input.password === "string" ? input.password : "";
@@ -67,7 +92,7 @@ export function validateLoginInput(input: { email?: unknown; password?: unknown 
   return { email, password };
 }
 
-export async function createUserAccount(input: { name: string; email: string; password: string }) {
+async function findUserByEmail(email: string) {
   const existing = await query<DbUserRow>(
     `
       SELECT id, email, name, avatar, password_hash
@@ -75,15 +100,22 @@ export async function createUserAccount(input: { name: string; email: string; pa
       WHERE LOWER(email) = LOWER($1)
       LIMIT 1;
     `,
-    [input.email],
+    [email],
   );
 
-  const existingUser = existing.rows[0];
+  return existing.rows[0] || null;
+}
+
+export async function createOrActivateUserAccount(input: {
+  name: string;
+  email: string;
+  passwordHash: string;
+}) {
+  const existingUser = await findUserByEmail(input.email);
+
   if (existingUser?.password_hash) {
     throw new AuthConflictError("Unable to create account.");
   }
-
-  const passwordHash = await bcrypt.hash(input.password, SALT_ROUNDS);
 
   if (existingUser) {
     const updated = await query<AuthUser>(
@@ -93,7 +125,7 @@ export async function createUserAccount(input: { name: string; email: string; pa
         WHERE id = $3
         RETURNING id, email, name, avatar;
       `,
-      [input.name, passwordHash, existingUser.id],
+      [input.name, input.passwordHash, existingUser.id],
     );
 
     return updated.rows[0];
@@ -106,7 +138,7 @@ export async function createUserAccount(input: { name: string; email: string; pa
         VALUES ($1, $2, $3, $4)
         RETURNING id, email, name, avatar;
       `,
-      [randomUUID(), input.email, input.name, passwordHash],
+      [randomUUID(), input.email, input.name, input.passwordHash],
     );
 
     return result.rows[0];
@@ -117,6 +149,16 @@ export async function createUserAccount(input: { name: string; email: string; pa
 
     throw error;
   }
+}
+
+export async function createUserAccount(input: { name: string; email: string; password: string }) {
+  const passwordHash = await bcrypt.hash(input.password, SALT_ROUNDS);
+
+  return createOrActivateUserAccount({
+    name: input.name,
+    email: input.email,
+    passwordHash,
+  });
 }
 
 export async function authenticateUser(input: { email: string; password: string }) {

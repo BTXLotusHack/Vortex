@@ -4,7 +4,9 @@ import {
   getCurrentUser,
   login as loginRequest,
   logout as logoutRequest,
+  resendSignupOtp as resendSignupOtpRequest,
   signup as signupRequest,
+  verifySignupOtp as verifySignupOtpRequest,
   type AuthUser as User,
 } from "@/lib/api";
 
@@ -17,13 +19,22 @@ interface SignupPayload extends Credentials {
   name: string;
 }
 
+interface SignupPendingState {
+  email: string;
+  message: string;
+}
+
 interface AuthState {
   user: User | null;
   isLoading: boolean;
+  pendingSignup: SignupPendingState | null;
   initialize: () => () => void;
   refreshUser: () => Promise<User | null>;
   login: (payload: Credentials) => Promise<User>;
-  signup: (payload: SignupPayload) => Promise<User>;
+  signup: (payload: SignupPayload) => Promise<SignupPendingState>;
+  verifySignupOtp: (payload: { email: string; otp: string }) => Promise<User>;
+  resendSignupOtp: (payload: { email: string }) => Promise<SignupPendingState>;
+  clearPendingSignup: () => void;
   logout: () => Promise<void>;
 }
 
@@ -42,6 +53,7 @@ function toFriendlyMessage(error: unknown, fallback: string) {
 export const useAuthStore = create<AuthState>()((set) => ({
   user: null,
   isLoading: true,
+  pendingSignup: null,
 
   initialize: () => {
     let active = true;
@@ -83,16 +95,40 @@ export const useAuthStore = create<AuthState>()((set) => ({
 
   signup: async (payload) => {
     try {
-      const { user } = await signupRequest(payload);
-      if (!user) {
-        throw new Error("Unable to create account.");
-      }
-
-      set({ user });
-      return user;
+      const pendingSignup = await signupRequest(payload);
+      set({ pendingSignup });
+      return pendingSignup;
     } catch (error) {
       throw new Error(toFriendlyMessage(error, "Unable to create account."));
     }
+  },
+
+  verifySignupOtp: async (payload) => {
+    try {
+      const { user } = await verifySignupOtpRequest(payload);
+      if (!user) {
+        throw new Error("Invalid or expired OTP.");
+      }
+
+      set({ user, pendingSignup: null });
+      return user;
+    } catch (error) {
+      throw new Error(toFriendlyMessage(error, "Invalid or expired OTP."));
+    }
+  },
+
+  resendSignupOtp: async (payload) => {
+    try {
+      const pendingSignup = await resendSignupOtpRequest(payload);
+      set({ pendingSignup });
+      return pendingSignup;
+    } catch (error) {
+      throw new Error(toFriendlyMessage(error, "Unable to resend OTP."));
+    }
+  },
+
+  clearPendingSignup: () => {
+    set({ pendingSignup: null });
   },
 
   logout: async () => {

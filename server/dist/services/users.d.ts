@@ -17,6 +17,18 @@ export declare function validateSignupInput(input: {
     email: string;
     password: string;
 };
+export declare function validateSignupOtpInput(input: {
+    email?: unknown;
+    otp?: unknown;
+}): {
+    email: string;
+    otp: string;
+};
+export declare function validateSignupEmailInput(input: {
+    email?: unknown;
+}): {
+    email: string;
+};
 export declare function validateLoginInput(input: {
     email?: unknown;
     password?: unknown;
@@ -24,6 +36,11 @@ export declare function validateLoginInput(input: {
     email: string;
     password: string;
 };
+export declare function createOrActivateUserAccount(input: {
+    name: string;
+    email: string;
+    passwordHash: string;
+}): Promise<AuthUser>;
 export declare function createUserAccount(input: {
     name: string;
     email: string;

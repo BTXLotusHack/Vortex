@@ -12,6 +12,11 @@ type AuthResponse = {
   user: AuthUser | null;
 };
 
+type SignupOtpResponse = {
+  email: string;
+  message: string;
+};
+
 type ApiErrorPayload = {
   error?: string;
   message?: string;
@@ -561,7 +566,32 @@ export async function signup(payload: {
     body: JSON.stringify(payload),
   });
 
+  return parseApiResponse<SignupOtpResponse>(response);
+}
+
+export async function verifySignupOtp(payload: {
+  email: string;
+  otp: string;
+}) {
+  const response = await apiFetch("/api/auth/signup/verify", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
   return parseApiResponse<AuthResponse>(response);
+}
+
+export async function resendSignupOtp(payload: {
+  email: string;
+}) {
+  const response = await apiFetch("/api/auth/signup/resend", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  return parseApiResponse<SignupOtpResponse>(response);
 }
 
 export async function login(payload: { email: string; password: string }) {
