@@ -35,6 +35,27 @@ function parseJsonText(raw) {
         return null;
     }
 }
+function normalizeCvFeedback(feedback) {
+    const preferredOrder = [
+        "Formatting & Structure",
+        "Content & Impact",
+        "Keywords & ATS",
+        "Overall Impression",
+    ];
+    const safeFeedback = (feedback || [])
+        .map((item) => ({
+        category: item.category,
+        score: Math.min(25, Math.max(0, Math.round(Number(item.score || 0)))),
+        maxScore: 25,
+        comment: item.comment || "",
+        suggestions: Array.isArray(item.suggestions) ? item.suggestions.filter(Boolean).slice(0, 3) : [],
+    }))
+        .filter((item) => preferredOrder.includes(item.category));
+    const uniqueByCategory = preferredOrder
+        .map((category) => safeFeedback.find((item) => item.category === category))
+        .filter((item) => Boolean(item));
+    return uniqueByCategory;
+}
 const upload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
@@ -57,7 +78,7 @@ cvRouter.post("/analyze", optionalAuth, upload.single("cv"), async (req, res) =>
             const llm = new ChatOpenAI({
                 apiKey,
                 model: process.env.OPENAI_CHAT_MODEL || "gpt-4o-mini",
-                temperature: 0.7,
+                temperature: 0,
             });
             // Extract text from PDF
             let text = "";
@@ -69,7 +90,6 @@ cvRouter.post("/analyze", optionalAuth, upload.single("cv"), async (req, res) =>
             else {
                 text = file.buffer.toString("utf-8");
             }
-            const nonce = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
             const response = await llm.invoke([
                 {
                     role: "system",
@@ -78,8 +98,6 @@ cvRouter.post("/analyze", optionalAuth, upload.single("cv"), async (req, res) =>
                 {
                     role: "user",
                     content: `Analyze this CV for target role "${role}".
-Randomization seed: ${nonce}
-
 CV text:\n${text.slice(0, 7000)}
 
 Return strict JSON:
@@ -114,33 +132,38 @@ Return strict JSON:
 Rules:
 - Use all 4 categories once each.
 - Keep suggestions concrete and tailored to this role.
-- Vary wording across runs while staying factual.
+- Keep the scoring deterministic and stable for the same CV + role + job description.
+- Use a strict rubric: each category must be scored from 0 to 25 and the overall score should equal the sum of the 4 category scores.
 
 Relevant job description:
 ${jobDescription.slice(0, 5000) || "Not provided"}`,
                 },
             ]);
             const parsed = parseJsonText(readContentAsText(response.content));
-            if (parsed?.feedback?.length) {
-                return res.json({
-                    overallScore: Math.min(100, Math.max(0, Math.round(Number(parsed.overallScore ?? 70)))),
-                    feedback: parsed.feedback,
-                    insights: {
-                        strengths: parsed.insights?.strengths || [],
-                        risks: parsed.insights?.risks || [],
-                        nextSteps: parsed.insights?.nextSteps || [],
-                    },
-                    candidateProfile: {
-                        summary: parsed.candidateProfile?.summary || "",
-                        strengths: parsed.candidateProfile?.strengths || [],
-                        risks: parsed.candidateProfile?.risks || [],
-                        likelySkills: parsed.candidateProfile?.likelySkills || [],
-                        seniority: parsed.candidateProfile?.seniority || "Unknown",
-                        jobFitScore: Number(parsed.candidateProfile?.jobFitScore || 0),
-                        jobFitVerdict: parsed.candidateProfile?.jobFitVerdict || "partial-fit",
-                        jobFitSummary: parsed.candidateProfile?.jobFitSummary || "",
-                    },
-                });
+            if (parsed) {
+                const normalizedFeedback = normalizeCvFeedback(parsed.feedback);
+                if (normalizedFeedback.length === 4) {
+                    const computedOverallScore = normalizedFeedback.reduce((sum, item) => sum + item.score, 0);
+                    return res.json({
+                        overallScore: Math.min(100, Math.max(0, computedOverallScore)),
+                        feedback: normalizedFeedback,
+                        insights: {
+                            strengths: parsed.insights?.strengths || [],
+                            risks: parsed.insights?.risks || [],
+                            nextSteps: parsed.insights?.nextSteps || [],
+                        },
+                        candidateProfile: {
+                            summary: parsed.candidateProfile?.summary || "",
+                            strengths: parsed.candidateProfile?.strengths || [],
+                            risks: parsed.candidateProfile?.risks || [],
+                            likelySkills: parsed.candidateProfile?.likelySkills || [],
+                            seniority: parsed.candidateProfile?.seniority || "Unknown",
+                            jobFitScore: Number(parsed.candidateProfile?.jobFitScore || 0),
+                            jobFitVerdict: parsed.candidateProfile?.jobFitVerdict || "partial-fit",
+                            jobFitSummary: parsed.candidateProfile?.jobFitSummary || "",
+                        },
+                    });
+                }
             }
         }
         // Fallback: mock analysis

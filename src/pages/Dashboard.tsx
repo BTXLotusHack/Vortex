@@ -1,19 +1,16 @@
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ModuleCard } from "@/components/ModuleCard";
-import { ScoreRing } from "@/components/ScoreRing";
 import { useInterviewStore } from "@/stores/interviewStore";
 import { FileText, Mic, Code2, TrendingUp, TrendingDown, Sparkles, ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
 
 export default function Dashboard() {
-  const { getLatestAttempt, getModuleAttempts, getTotalScore, getImprovement, pipeline, candidateProfile } =
+  const { getLatestAttempt, getModuleAttempts, getImprovement, pipeline, candidateProfile } =
     useInterviewStore();
 
   const cvAttempt = getLatestAttempt("cv-screening");
   const voiceAttempt = getLatestAttempt("voice-interview");
   const techAttempt = getLatestAttempt("technical-interview");
-  const total = getTotalScore();
-
   const hasAnyAttempt = cvAttempt || voiceAttempt || techAttempt;
   const interviewsUnlocked = pipeline.cvUploaded && Boolean(candidateProfile?.jobFitSummary);
 
@@ -111,35 +108,6 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
-
-        {hasAnyAttempt && (
-          <div
-            className="surface-glass mb-8 flex flex-col items-start gap-6 rounded-[2rem] border border-luxe p-6 opacity-0 animate-fade-up sm:flex-row sm:items-center"
-            style={{ animationDelay: "100ms", animationFillMode: "forwards" }}
-          >
-            <ScoreRing
-              score={total.score}
-              maxScore={total.max}
-              size={96}
-              strokeWidth={7}
-              label="Overall"
-            />
-            <div className="flex-1 text-left">
-              <div className="mb-2 text-[11px] uppercase tracking-[0.26em] text-muted-foreground">
-                Overview
-              </div>
-              <h2 className="text-xl font-semibold">Your Interview Readiness</h2>
-              <p className="mt-2 max-w-2xl text-sm leading-7 text-muted-foreground">
-                Based on your latest attempt across all modules.
-                {total.score / total.max >= 0.75
-                  ? " You are in a strong position now, so focus on precision and consistency."
-                  : total.score / total.max >= 0.5
-                    ? " Momentum is there, and the next gains should come from tightening weaker areas."
-                    : " The foundation is still forming, but a few more focused rounds will move things quickly."}
-              </p>
-            </div>
-          </div>
-        )}
 
         <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
           <ModuleCard

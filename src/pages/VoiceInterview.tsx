@@ -52,6 +52,7 @@ export default function VoiceInterview() {
     pipeline,
     updatePipeline,
     addAttempt,
+    upsertPipelineRun,
   } = useInterviewStore();
 
   const interviewsUnlocked =
@@ -279,6 +280,7 @@ export default function VoiceInterview() {
           feedback: result.feedback,
           jobRole: currentJobRole,
           jobDescription: currentJobDescription,
+          pipelineSessionId: fromPipeline ? pipeline.currentSessionId : undefined,
         });
         updatePipeline({
           active: true,
@@ -289,6 +291,12 @@ export default function VoiceInterview() {
         });
         setMarkedComplete(true);
         toast.success("Voice interview scored and saved.");
+        if (fromPipeline && pipeline.currentSessionId) {
+          const pipelineRun = upsertPipelineRun(pipeline.currentSessionId);
+          if (pipelineRun) {
+            navigate(`/pipeline-summary/${pipelineRun.id}`);
+          }
+        }
       } catch (error) {
         console.error(error);
         toast.error("Could not score the voice interview.");

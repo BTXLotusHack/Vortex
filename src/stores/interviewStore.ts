@@ -21,6 +21,7 @@ export interface AttemptResult {
   jobRole?: string;
   jobDescription?: string;
   duration?: number;
+  pipelineSessionId?: string;
 }
 
 export interface CandidateProfile {
@@ -51,10 +52,24 @@ export interface InterviewPipelineState {
   technicalRequired: boolean;
   recommendedNextStep: "cv" | "voice" | "technical" | "complete";
   lastCompletedStep?: "cv" | "voice" | "technical";
+  currentSessionId?: string;
+}
+
+export interface PipelineRun {
+  id: string;
+  date: string;
+  jobRole?: string;
+  jobDescription?: string;
+  cvAttemptId: string;
+  voiceAttemptId: string;
+  technicalAttemptId: string;
+  score: number;
+  maxScore: number;
 }
 
 export interface InterviewState {
   attempts: AttemptResult[];
+  pipelineRuns: PipelineRun[];
   currentJobRole: string;
   currentJobDescription: string;
   latestCVFileName: string;
@@ -69,9 +84,12 @@ export interface InterviewState {
   setLatestCVAnalysis: (analysis: SavedCVAnalysis | null) => void;
   updatePipeline: (updates: Partial<InterviewPipelineState>) => void;
   resetPipeline: () => void;
+  upsertPipelineRun: (sessionId: string) => PipelineRun | null;
   setLatestCVContext: (payload: { fileName: string; score: number }) => void;
   getModuleAttempts: (module: ModuleType) => AttemptResult[];
   getLatestAttempt: (module: ModuleType) => AttemptResult | undefined;
+  getPipelineRun: (id: string) => PipelineRun | undefined;
+  getPipelineAttempts: (id: string) => AttemptResult[];
   getTotalScore: () => { score: number; max: number };
   getImprovement: (module: ModuleType) => { improved: string[]; needsWork: string[] } | null;
 }
@@ -80,6 +98,7 @@ export const useInterviewStore = create<InterviewState>()(
   persist(
     (set, get) => ({
       attempts: [],
+      pipelineRuns: [],
       currentJobRole: "Frontend Developer",
       currentJobDescription: "",
       latestCVFileName: "",
@@ -115,8 +134,41 @@ export const useInterviewStore = create<InterviewState>()(
             voiceRequired: true,
             technicalRequired: true,
             recommendedNextStep: "cv",
+            currentSessionId: undefined,
           },
         }),
+      upsertPipelineRun: (sessionId) => {
+        const attempts = get().attempts.filter((attempt) => attempt.pipelineSessionId === sessionId);
+        const findLatest = (module: ModuleType) => attempts.find((attempt) => attempt.module === module);
+        const cvAttempt = findLatest("cv-screening");
+        const voiceAttempt = findLatest("voice-interview");
+        const technicalAttempt = findLatest("technical-interview");
+
+        if (!cvAttempt || !voiceAttempt || !technicalAttempt) {
+          return null;
+        }
+
+        const pipelineRun: PipelineRun = {
+          id: sessionId,
+          date: technicalAttempt.date,
+          jobRole: technicalAttempt.jobRole || voiceAttempt.jobRole || cvAttempt.jobRole,
+          jobDescription: technicalAttempt.jobDescription || voiceAttempt.jobDescription || cvAttempt.jobDescription,
+          cvAttemptId: cvAttempt.id,
+          voiceAttemptId: voiceAttempt.id,
+          technicalAttemptId: technicalAttempt.id,
+          score: cvAttempt.overallScore + voiceAttempt.overallScore + technicalAttempt.overallScore,
+          maxScore: cvAttempt.maxScore + voiceAttempt.maxScore + technicalAttempt.maxScore,
+        };
+
+        set((state) => ({
+          pipelineRuns: [
+            pipelineRun,
+            ...state.pipelineRuns.filter((run) => run.id !== sessionId),
+          ],
+        }));
+
+        return pipelineRun;
+      },
       setLatestCVContext: ({ fileName, score }) =>
         set({
           latestCVFileName: fileName,
@@ -128,6 +180,19 @@ export const useInterviewStore = create<InterviewState>()(
 
       getLatestAttempt: (module) =>
         get().attempts.find((a) => a.module === module),
+
+      getPipelineRun: (id) =>
+        get().pipelineRuns.find((run) => run.id === id),
+
+      getPipelineAttempts: (id) => {
+        const run = get().getPipelineRun(id);
+        if (!run) return [];
+
+        const attemptsById = new Map(get().attempts.map((attempt) => [attempt.id, attempt]));
+        return [run.cvAttemptId, run.voiceAttemptId, run.technicalAttemptId]
+          .map((attemptId) => attemptsById.get(attemptId))
+          .filter((attempt): attempt is AttemptResult => Boolean(attempt));
+      },
 
       getTotalScore: () => {
         const modules: ModuleType[] = [
