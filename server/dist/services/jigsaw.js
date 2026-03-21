@@ -34,7 +34,8 @@ async function extractWithJigsaw(input) {
     };
     const formData = new FormData();
     if ("file" in input) {
-        formData.append("file", new Blob([input.file.buffer], { type: input.file.mimeType }), input.file.fileName);
+        const fileBytes = new Uint8Array(input.file.buffer);
+        formData.append("file", new Blob([fileBytes], { type: input.file.mimeType }), input.file.fileName);
     }
     else {
         formData.append("url", input.fileUrl);

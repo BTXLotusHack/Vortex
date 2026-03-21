@@ -1,6 +1,59 @@
 // API service layer — swap BASE_URL to your Node.js backend when ready
 const BASE_URL = import.meta.env.VITE_API_URL || "";
 
+export type AuthUser = {
+  id: string;
+  email: string;
+  name: string;
+  avatar?: string;
+};
+
+type AuthResponse = {
+  user: AuthUser | null;
+};
+
+type ApiErrorPayload = {
+  error?: string;
+  message?: string;
+};
+
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
+export function apiUrl(path: string) {
+  return `${BASE_URL}${path}`;
+}
+
+export async function apiFetch(path: string, init: RequestInit = {}) {
+  return fetch(apiUrl(path), {
+    credentials: "include",
+    ...init,
+  });
+}
+
+async function parseApiResponse<T>(response: Response): Promise<T> {
+  const contentType = response.headers.get("content-type") || "";
+  const isJson = contentType.includes("application/json");
+  const payload = isJson ? ((await response.json()) as T | ApiErrorPayload) : null;
+
+  if (!response.ok) {
+    const message =
+      (payload as ApiErrorPayload | null)?.error ||
+      (payload as ApiErrorPayload | null)?.message ||
+      "Request failed.";
+    throw new ApiError(message, response.status);
+  }
+
+  return payload as T;
+}
+
 type InterviewQuestionPayload = {
   id: string;
   question: string;
@@ -50,32 +103,37 @@ export async function analyzeCV(
   file: File,
   options?: { jobRole?: string }
 ): Promise<CVAnalysisResult> {
-  if (BASE_URL) {
-    try {
-      const presigned = await requestCVUploadUrl(file);
-      if (presigned) {
-        await uploadCVToPresignedUrl(file, presigned);
-        const uploaded = await analyzeUploadedCV({
-          fileUrl: presigned.fileUrl,
-          key: presigned.key,
-          fileName: file.name,
-        });
-        if (uploaded) return uploaded;
-      }
-    } catch {
-      // Fallback to direct upload below when presigned flow is unavailable.
+  try {
+    const presigned = await requestCVUploadUrl(file);
+    if (presigned) {
+      await uploadCVToPresignedUrl(file, presigned);
+      const uploaded = await analyzeUploadedCV({
+        fileUrl: presigned.fileUrl,
+        key: presigned.key,
+        fileName: file.name,
+      });
+      if (uploaded) return uploaded;
     }
+  } catch {
+    // Fallback to direct upload below when presigned flow is unavailable.
+  }
 
+  try {
     const formData = new FormData();
     formData.append("cv", file);
     if (options?.jobRole) {
       formData.append("jobRole", options.jobRole);
     }
-    const res = await fetch(`${BASE_URL}/api/cv/analyze`, {
+    const res = await apiFetch("/api/cv/analyze", {
       method: "POST",
       body: formData,
     });
-    return res.json();
+
+    if (res.ok) {
+      return (await res.json()) as CVAnalysisResult;
+    }
+  } catch {
+    // Fall back to mock analysis below when backend is unavailable.
   }
 
   // Mock analysis
@@ -141,11 +199,9 @@ export async function analyzeCV(
 }
 
 export async function requestCVUploadUrl(file: File): Promise<PresignedUploadPayload | null> {
-  if (!BASE_URL) return null;
-
   for (const endpoint of PRESIGN_ENDPOINTS) {
     try {
-      const response = await fetch(`${BASE_URL}${endpoint}`, {
+      const response = await apiFetch(endpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -233,12 +289,10 @@ export async function analyzeUploadedCV(payload: {
   fileName?: string;
   jobRole?: string;
 }): Promise<CVAnalysisResult | null> {
-  if (!BASE_URL) return null;
-
   const endpoints = ["/api/cv/analyze-upload", "/api/cv/analyze-by-url"];
   for (const endpoint of endpoints) {
     try {
-      const response = await fetch(`${BASE_URL}${endpoint}`, {
+      const response = await apiFetch(endpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -268,8 +322,8 @@ export async function getInterviewQuestions(
     const briefQuery = options?.questionBrief
       ? `&brief=${encodeURIComponent(options.questionBrief)}`
       : "";
-    const endpoint = `${BASE_URL}/api/interview/questions?role=${encodeURIComponent(jobRole)}&type=${type}&count=${count}${briefQuery}`;
-    const res = await fetch(endpoint, {
+    const endpoint = `/api/interview/questions?role=${encodeURIComponent(jobRole)}&type=${type}&count=${count}${briefQuery}`;
+    const res = await apiFetch(endpoint, {
       method: "GET",
       cache: "no-store",
       headers: options?.questionBrief
@@ -457,7 +511,7 @@ export async function evaluateAnswer(
   };
 }> {
   try {
-    const res = await fetch(`${BASE_URL}/api/interview/evaluate`, {
+    const res = await apiFetch("/api/interview/evaluate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -494,4 +548,45 @@ export async function evaluateAnswer(
       nextSteps: missed.slice(0, 2).map((item) => `Practice: ${item}`),
     },
   };
+}
+
+export async function signup(payload: {
+  name: string;
+  email: string;
+  password: string;
+}) {
+  const response = await apiFetch("/api/auth/signup", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  return parseApiResponse<AuthResponse>(response);
+}
+
+export async function login(payload: { email: string; password: string }) {
+  const response = await apiFetch("/api/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  return parseApiResponse<AuthResponse>(response);
+}
+
+export async function logout() {
+  const response = await apiFetch("/api/auth/logout", {
+    method: "POST",
+  });
+
+  return parseApiResponse<{ success: boolean }>(response);
+}
+
+export async function getCurrentUser() {
+  const response = await apiFetch("/api/auth/me", {
+    method: "GET",
+    cache: "no-store",
+  });
+
+  return parseApiResponse<AuthResponse>(response);
 }

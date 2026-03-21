@@ -7,10 +7,13 @@ export interface AuthUser {
 }
 declare global {
     namespace Express {
+        interface Request {
+            user?: AuthUser;
+        }
         interface User extends AuthUser {
         }
     }
 }
 export declare function requireAuth(req: Request, res: Response, next: NextFunction): void | Response<any, Record<string, any>>;
-export declare function optionalAuth(req: Request, res: Response, next: NextFunction): void;
+export declare function optionalAuth(req: Request, _res: Response, next: NextFunction): void;
 //# sourceMappingURL=auth.d.ts.map

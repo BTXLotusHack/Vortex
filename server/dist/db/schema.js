@@ -1,6 +1,14 @@
 import { query } from "./pool.js";
 export async function initializeSchema() {
-    await query("CREATE EXTENSION IF NOT EXISTS vector;");
+    let hasVectorExtension = true;
+    try {
+        await query("CREATE EXTENSION IF NOT EXISTS vector;");
+    }
+    catch (error) {
+        hasVectorExtension = false;
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn("Vector extension unavailable. RAG document storage is disabled:", message);
+    }
     await query("CREATE EXTENSION IF NOT EXISTS pgcrypto;");
     await query(`
     CREATE TABLE IF NOT EXISTS users (
@@ -8,9 +16,12 @@ export async function initializeSchema() {
       email TEXT UNIQUE NOT NULL,
       name TEXT NOT NULL,
       avatar TEXT,
+      password_hash TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
+    await query("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;");
+    await query("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_lower ON users (LOWER(email));");
     await query(`
     CREATE TABLE IF NOT EXISTS sessions (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -33,20 +44,24 @@ export async function initializeSchema() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
-    await query(`
-    CREATE TABLE IF NOT EXISTS rag_documents (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      session_id UUID REFERENCES sessions(id) ON DELETE CASCADE,
-      source_type TEXT NOT NULL,
-      content TEXT NOT NULL,
-      metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-      embedding vector(1536) NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `);
+    if (hasVectorExtension) {
+        await query(`
+      CREATE TABLE IF NOT EXISTS rag_documents (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        session_id UUID REFERENCES sessions(id) ON DELETE CASCADE,
+        source_type TEXT NOT NULL,
+        content TEXT NOT NULL,
+        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+        embedding vector(1536) NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+    }
     await query("CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);");
     await query("CREATE INDEX IF NOT EXISTS idx_scores_session_id ON scores(session_id);");
-    await query("CREATE INDEX IF NOT EXISTS idx_rag_documents_user_id ON rag_documents(user_id);");
+    if (hasVectorExtension) {
+        await query("CREATE INDEX IF NOT EXISTS idx_rag_documents_user_id ON rag_documents(user_id);");
+    }
 }
 //# sourceMappingURL=schema.js.map

@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { ProtectedRoute, PublicOnlyRoute } from "@/components/auth/RouteGuards";
 import { useAuthStore } from "@/stores/authStore";
 import Dashboard from "./pages/Dashboard";
 import CVScreening from "./pages/CVScreening";
@@ -31,13 +32,17 @@ const App = () => (
       <BrowserRouter>
         <AuthInitializer>
           <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/cv-screening" element={<CVScreening />} />
-            <Route path="/voice-interview" element={<VoiceInterview />} />
-            <Route path="/technical-interview" element={<TechnicalInterview />} />
-            <Route path="/results" element={<Results />} />
+            <Route element={<PublicOnlyRoute />}>
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
+            </Route>
+            <Route element={<ProtectedRoute />}>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/cv-screening" element={<CVScreening />} />
+              <Route path="/voice-interview" element={<VoiceInterview />} />
+              <Route path="/technical-interview" element={<TechnicalInterview />} />
+              <Route path="/results" element={<Results />} />
+            </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthInitializer>

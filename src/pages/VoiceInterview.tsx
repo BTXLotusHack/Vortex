@@ -3,8 +3,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { ScoreRing } from "@/components/ScoreRing";
 import { FeedbackPanel } from "@/components/FeedbackPanel";
 import { useInterviewStore, type FeedbackItem } from "@/stores/interviewStore";
-import { useAuthStore } from "@/stores/authStore";
-import { getInterviewQuestions, evaluateAnswer } from "@/lib/api";
+import { apiFetch, getInterviewQuestions, evaluateAnswer } from "@/lib/api";
 import { ArrowLeft, Mic, MicOff, Loader2, Play, ChevronRight, Volume2, VolumeX } from "lucide-react";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -14,8 +13,6 @@ import { Conversation } from "@elevenlabs/client";
 type RealtimeStatus = "disconnected" | "connecting" | "connected" | "disconnecting";
 
 type Question = Awaited<ReturnType<typeof getInterviewQuestions>>[number];
-
-const API_URL = import.meta.env.VITE_API_URL || "";
 
 export default function VoiceInterview() {
   const [stage, setStage] = useState<"setup" | "interview" | "results">("setup");
@@ -39,11 +36,8 @@ export default function VoiceInterview() {
   const hasCapturedRealtimeTurnRef = useRef(false);
 
   const { currentJobRole, setJobRole, addAttempt, getImprovement } = useInterviewStore();
-  const getAuthHeaders = useCallback((): Record<string, string> => ({}), []);
 
   const fetchConversationToken = async (): Promise<string | null> => {
-    if (!API_URL) return null;
-
     const endpointCandidates = [
       "/api/voice/conversation-token",
       "/api/voice/token",
@@ -52,9 +46,8 @@ export default function VoiceInterview() {
 
     for (const endpoint of endpointCandidates) {
       try {
-        const response = await fetch(`${API_URL}${endpoint}`, {
+        const response = await apiFetch(endpoint, {
           method: "GET",
-          headers: getAuthHeaders(),
         });
 
         if (!response.ok) continue;
@@ -139,33 +132,30 @@ export default function VoiceInterview() {
     if (!ttsEnabled) return;
 
     // Try ElevenLabs via backend
-    if (API_URL) {
-      try {
-        setIsSpeaking(true);
-        const response = await fetch(`${API_URL}/api/voice/tts`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...getAuthHeaders(),
-          },
-          body: JSON.stringify({ text }),
-        });
+    try {
+      setIsSpeaking(true);
+      const response = await apiFetch("/api/voice/tts", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ text }),
+      });
 
-        if (response.ok) {
-          const blob = await response.blob();
-          const url = URL.createObjectURL(blob);
-          const audio = new Audio(url);
-          audioRef.current = audio;
-          audio.onended = () => {
-            setIsSpeaking(false);
-            URL.revokeObjectURL(url);
-          };
-          await audio.play();
-          return;
-        }
-      } catch (err) {
-        console.warn("ElevenLabs TTS unavailable, falling back to browser speech");
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        audioRef.current = audio;
+        audio.onended = () => {
+          setIsSpeaking(false);
+          URL.revokeObjectURL(url);
+        };
+        await audio.play();
+        return;
       }
+    } catch {
+      console.warn("ElevenLabs TTS unavailable, falling back to browser speech");
     }
 
     // Fallback: Web Speech API
@@ -176,7 +166,7 @@ export default function VoiceInterview() {
       utterance.onend = () => setIsSpeaking(false);
       speechSynthesis.speak(utterance);
     }
-  }, [ttsEnabled, getAuthHeaders]);
+  }, [ttsEnabled]);
 
   // Start recording via MediaRecorder
   const startRecording = async () => {
@@ -195,25 +185,22 @@ export default function VoiceInterview() {
         const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
 
         // Try server STT
-        if (API_URL) {
-          try {
-            const formData = new FormData();
-            formData.append("audio", audioBlob, "recording.webm");
-            const res = await fetch(`${API_URL}/api/voice/stt`, {
-              method: "POST",
-              headers: getAuthHeaders(),
-              body: formData,
-            });
-            if (res.ok) {
-              const data = await res.json();
-              if (data.text) {
-                setUserAnswer((prev) => (prev ? prev + " " : "") + data.text);
-                return;
-              }
+        try {
+          const formData = new FormData();
+          formData.append("audio", audioBlob, "recording.webm");
+          const res = await apiFetch("/api/voice/stt", {
+            method: "POST",
+            body: formData,
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.text) {
+              setUserAnswer((prev) => (prev ? prev + " " : "") + data.text);
+              return;
             }
-          } catch {
-            console.warn("Server STT unavailable");
           }
+        } catch {
+          console.warn("Server STT unavailable");
         }
 
         // Fallback: Web Speech API (already handles via SpeechRecognition below)

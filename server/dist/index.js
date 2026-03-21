@@ -1,7 +1,5 @@
 import express from "express";
 import cors from "cors";
-import session from "express-session";
-import passport from "passport";
 import dotenv from "dotenv";
 import { authRouter, configurePassport } from "./routes/auth.js";
 import { cvRouter } from "./routes/cv.js";
@@ -19,20 +17,7 @@ app.use(cors({
     credentials: true,
 }));
 app.use(express.json());
-app.use(session({
-    secret: process.env.SESSION_SECRET || "dev-secret",
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-        secure: process.env.NODE_ENV === "production",
-        httpOnly: true,
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    },
-}));
-// Passport
 configurePassport();
-app.use(passport.initialize());
-app.use(passport.session());
 // Routes
 app.use("/api/auth", authRouter);
 app.use("/api/cv", cvRouter);

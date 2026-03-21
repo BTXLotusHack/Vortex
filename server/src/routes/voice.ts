@@ -75,7 +75,8 @@ voiceRouter.post("/stt", optionalAuth, async (req, res) => {
         }
 
         const formData = new FormData();
-        formData.append("file", new Blob([req.file.buffer]), "audio.webm");
+        const audioBytes = new Uint8Array(req.file.buffer);
+        formData.append("file", new Blob([audioBytes]), "audio.webm");
         formData.append("model_id", "scribe_v2");
         formData.append("language_code", "eng");
 

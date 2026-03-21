@@ -1,9 +1,6 @@
 import express from "express";
 import cors from "cors";
-import session from "express-session";
-import passport from "passport";
 import dotenv from "dotenv";
-import type { RequestHandler } from "express";
 import { authRouter, configurePassport } from "./routes/auth.js";
 import { cvRouter } from "./routes/cv.js";
 import { interviewRouter } from "./routes/interview.js";
@@ -25,21 +22,7 @@ app.use(cors({
   credentials: true,
 }));
 app.use(express.json());
-app.use(session({
-  secret: process.env.SESSION_SECRET || "dev-secret",
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    secure: process.env.NODE_ENV === "production",
-    httpOnly: true,
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-  },
-}) as unknown as RequestHandler);
-
-// Passport
 configurePassport();
-app.use(passport.initialize() as unknown as RequestHandler);
-app.use(passport.session() as unknown as RequestHandler);
 
 // Routes
 app.use("/api/auth", authRouter);

@@ -52,9 +52,10 @@ async function extractWithJigsaw(input: JigsawInput): Promise<string> {
 
   const formData = new FormData();
   if ("file" in input) {
+    const fileBytes = new Uint8Array(input.file.buffer);
     formData.append(
       "file",
-      new Blob([input.file.buffer], { type: input.file.mimeType }),
+      new Blob([fileBytes], { type: input.file.mimeType }),
       input.file.fileName
     );
   } else {

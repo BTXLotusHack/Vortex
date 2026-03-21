@@ -1,6 +1,6 @@
 import { Router } from "express";
 import multer from "multer";
-import { optionalAuth } from "../middleware/auth.js";
+import { requireAuth } from "../middleware/auth.js";
 import { initializeSchema } from "../db/schema.js";
 import { extractCvText } from "../services/jigsaw.js";
 import { scrapeLinkedinJob } from "../services/manus.js";
@@ -19,18 +19,9 @@ function resolveUser(req) {
             avatar: req.user.avatar,
         };
     }
-    const bodyUser = req.body?.user;
-    if (bodyUser?.id && bodyUser?.email && bodyUser?.name) {
-        return {
-            id: bodyUser.id,
-            email: bodyUser.email,
-            name: bodyUser.name,
-            avatar: bodyUser.avatar,
-        };
-    }
     return null;
 }
-dataRouter.post("/bootstrap", optionalAuth, async (_req, res) => {
+dataRouter.post("/bootstrap", requireAuth, async (_req, res) => {
     try {
         await initializeSchema();
         res.json({ success: true });
@@ -40,7 +31,7 @@ dataRouter.post("/bootstrap", optionalAuth, async (_req, res) => {
         res.status(500).json({ error: "Schema bootstrap failed" });
     }
 });
-dataRouter.post("/sessions", optionalAuth, async (req, res) => {
+dataRouter.post("/sessions", requireAuth, async (req, res) => {
     try {
         const user = resolveUser(req);
         if (!user) {
@@ -55,7 +46,7 @@ dataRouter.post("/sessions", optionalAuth, async (req, res) => {
         res.status(500).json({ error: "Failed to create session" });
     }
 });
-dataRouter.post("/cv/extract", optionalAuth, upload.single("cv"), async (req, res) => {
+dataRouter.post("/cv/extract", requireAuth, upload.single("cv"), async (req, res) => {
     try {
         const file = req.file;
         if (!file) {
@@ -85,7 +76,7 @@ dataRouter.post("/cv/extract", optionalAuth, upload.single("cv"), async (req, re
         res.status(500).json({ error: "Failed to extract CV text" });
     }
 });
-dataRouter.post("/linkedin-tech-stack", optionalAuth, async (req, res) => {
+dataRouter.post("/linkedin-tech-stack", requireAuth, async (req, res) => {
     try {
         const { jobUrl, sessionId } = req.body || {};
         if (!jobUrl || typeof jobUrl !== "string") {
@@ -116,7 +107,7 @@ dataRouter.post("/linkedin-tech-stack", optionalAuth, async (req, res) => {
         res.status(500).json({ error: "Failed to scrape LinkedIn job" });
     }
 });
-dataRouter.post("/rag/index", optionalAuth, async (req, res) => {
+dataRouter.post("/rag/index", requireAuth, async (req, res) => {
     try {
         const user = resolveUser(req);
         const { sessionId, cvText, jobText, techStack, jobUrl } = req.body || {};
@@ -150,7 +141,7 @@ dataRouter.post("/rag/index", optionalAuth, async (req, res) => {
         res.status(500).json({ error: "Failed to index RAG documents" });
     }
 });
-dataRouter.post("/rag/score", optionalAuth, async (req, res) => {
+dataRouter.post("/rag/score", requireAuth, async (req, res) => {
     try {
         const user = resolveUser(req);
         const { sessionId, question, answer } = req.body || {};

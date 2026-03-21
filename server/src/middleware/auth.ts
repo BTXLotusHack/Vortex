@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import jwt from "jsonwebtoken";
+import { readAuthTokenFromRequest, verifyAuthToken } from "../lib/auth.js";
 
 export interface AuthUser {
   id: string;
@@ -10,41 +10,38 @@ export interface AuthUser {
 
 declare global {
   namespace Express {
+    interface Request {
+      user?: AuthUser;
+    }
+
     interface User extends AuthUser {}
   }
 }
 
 export function requireAuth(req: Request, res: Response, next: NextFunction) {
-  // Check session first
-  if (req.isAuthenticated?.() && req.user) {
+  const token = readAuthTokenFromRequest(req);
+  if (!token) {
+    return res.status(401).json({ error: "Authentication required" });
+  }
+
+  try {
+    req.user = verifyAuthToken(token);
     return next();
+  } catch {
+    return res.status(401).json({ error: "Authentication required" });
   }
-
-  // Check JWT Bearer token
-  const authHeader = req.headers.authorization;
-  if (authHeader?.startsWith("Bearer ")) {
-    const token = authHeader.slice(7);
-    try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || "dev-jwt-secret") as AuthUser;
-      req.user = decoded;
-      return next();
-    } catch {
-      return res.status(401).json({ error: "Invalid token" });
-    }
-  }
-
-  return res.status(401).json({ error: "Authentication required" });
 }
 
-export function optionalAuth(req: Request, res: Response, next: NextFunction) {
-  const authHeader = req.headers.authorization;
-  if (authHeader?.startsWith("Bearer ")) {
-    const token = authHeader.slice(7);
+export function optionalAuth(req: Request, _res: Response, next: NextFunction) {
+  const token = readAuthTokenFromRequest(req);
+
+  if (token) {
     try {
-      req.user = jwt.verify(token, process.env.JWT_SECRET || "dev-jwt-secret") as AuthUser;
+      req.user = verifyAuthToken(token);
     } catch {
-      // Ignore invalid tokens for optional auth
+      req.user = undefined;
     }
   }
+
   next();
 }
