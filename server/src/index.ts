@@ -56,6 +56,11 @@ function classifyDatabaseError(error: unknown) {
   return "query_failed";
 }
 
+function sanitizeDatabaseErrorMessage(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.replace(/\s+/g, " ").trim().slice(0, 240);
+}
+
 // Middleware
 app.use(cors({
   origin(origin, callback) {
@@ -95,16 +100,36 @@ app.get("/api/health", async (_req, res) => {
   try {
     await query("SELECT 1;");
     payload.checks.database = "ok";
+  } catch (error) {
+    payload.status = "degraded";
+    payload.checks.database = classifyDatabaseError(error);
+    payload.checks.databaseError = sanitizeDatabaseErrorMessage(error);
+    res.status(503).json(payload);
+    return;
+  }
 
+  try {
     const tableCheck = await query<{
-      users: string | null;
-      signup_verifications: string | null;
-      password_reset_verifications: string | null;
+      users: boolean;
+      signup_verifications: boolean;
+      password_reset_verifications: boolean;
     }>(`
       SELECT
-        to_regclass('public.users') AS users,
-        to_regclass('public.signup_verifications') AS signup_verifications,
-        to_regclass('public.password_reset_verifications') AS password_reset_verifications;
+        EXISTS (
+          SELECT 1
+          FROM information_schema.tables
+          WHERE table_schema = 'public' AND table_name = 'users'
+        ) AS users,
+        EXISTS (
+          SELECT 1
+          FROM information_schema.tables
+          WHERE table_schema = 'public' AND table_name = 'signup_verifications'
+        ) AS signup_verifications,
+        EXISTS (
+          SELECT 1
+          FROM information_schema.tables
+          WHERE table_schema = 'public' AND table_name = 'password_reset_verifications'
+        ) AS password_reset_verifications;
     `);
 
     const tables = tableCheck.rows[0];
@@ -115,7 +140,8 @@ app.get("/api/health", async (_req, res) => {
     };
   } catch (error) {
     payload.status = "degraded";
-    payload.checks.database = classifyDatabaseError(error);
+    payload.checks.authTables = "query_failed";
+    payload.checks.authTablesError = sanitizeDatabaseErrorMessage(error);
   }
 
   const statusCode = payload.status === "ok" ? 200 : 503;
