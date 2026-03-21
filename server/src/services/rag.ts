@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { OpenAIEmbeddings, ChatOpenAI } from "@langchain/openai";
 import { PromptTemplate } from "@langchain/core/prompts";
 import { query } from "../db/pool.js";
@@ -103,9 +104,10 @@ export async function ensureUser(user: EnsureUserInput) {
 }
 
 export async function createSession(userId: string, jobUrl?: string) {
+  const sessionId = randomUUID();
   const inserted = await query<{ id: string }>(
-    `INSERT INTO sessions (user_id, job_url) VALUES ($1, $2) RETURNING id;`,
-    [userId, jobUrl || null]
+    `INSERT INTO sessions (id, user_id, job_url) VALUES ($1, $2, $3) RETURNING id;`,
+    [sessionId, userId, jobUrl || null]
   );
   return inserted.rows[0].id;
 }
@@ -147,10 +149,11 @@ async function indexRagDocument(params: {
     const vector = await embeddings.embedQuery(chunk);
     await query(
       `
-        INSERT INTO rag_documents (user_id, session_id, source_type, content, metadata, embedding)
-        VALUES ($1, $2, $3, $4, $5::jsonb, $6::vector);
+        INSERT INTO rag_documents (id, user_id, session_id, source_type, content, metadata, embedding)
+        VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::vector);
       `,
       [
+        randomUUID(),
         params.userId,
         params.sessionId,
         params.sourceType,
@@ -234,10 +237,11 @@ export async function scoreInterviewWithRag(input: ScoreInput) {
 
   await query(
     `
-      INSERT INTO scores (session_id, user_id, overall_score, breakdown, rationale)
-      VALUES ($1, $2, $3, $4::jsonb, $5);
+      INSERT INTO scores (id, session_id, user_id, overall_score, breakdown, rationale)
+      VALUES ($1, $2, $3, $4, $5::jsonb, $6);
     `,
     [
+      randomUUID(),
       input.sessionId,
       input.userId,
       parsed.overallScore,

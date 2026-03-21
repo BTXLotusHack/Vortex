@@ -3,12 +3,21 @@ import jwt from "jsonwebtoken";
 export const AUTH_COOKIE_NAME = process.env.AUTH_COOKIE_NAME || "vortex_auth";
 const DEFAULT_TOKEN_TTL = "7d";
 const DEFAULT_COOKIE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const COOKIE_SAME_SITE_VALUES = new Set(["strict", "lax", "none"]);
 function getJwtSecret() {
     const secret = process.env.JWT_SECRET;
     if (!secret) {
         throw new Error("Missing JWT_SECRET. Set it in the server environment before using auth.");
     }
     return secret;
+}
+function getCookieSameSite() {
+    const sameSite = process.env.COOKIE_SAME_SITE?.trim().toLowerCase() ||
+        process.env.AUTH_COOKIE_SAME_SITE?.trim().toLowerCase();
+    if (sameSite && COOKIE_SAME_SITE_VALUES.has(sameSite)) {
+        return sameSite;
+    }
+    return "lax";
 }
 function shouldUseSecureCookies() {
     if (process.env.COOKIE_SECURE === "true") {
@@ -17,7 +26,7 @@ function shouldUseSecureCookies() {
     if (process.env.COOKIE_SECURE === "false") {
         return false;
     }
-    return process.env.NODE_ENV === "production";
+    return getCookieSameSite() === "none" || process.env.NODE_ENV === "production";
 }
 function getTokenTtl() {
     return (process.env.JWT_EXPIRES_IN ||
@@ -53,8 +62,9 @@ export function getAuthCookieOptions() {
     return {
         httpOnly: true,
         secure: shouldUseSecureCookies(),
-        sameSite: getSameSiteMode(),
+        sameSite: "strict",
         maxAge: getCookieMaxAge(),
+        domain: getCookieDomain(),
         path: "/",
     };
 }
@@ -92,7 +102,7 @@ export function clearAuthCookie(res) {
     res.clearCookie(AUTH_COOKIE_NAME, {
         httpOnly: true,
         secure: shouldUseSecureCookies(),
-        sameSite: getSameSiteMode(),
+        sameSite: "strict",
         path: "/",
     });
 }

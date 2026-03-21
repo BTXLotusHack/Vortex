@@ -8,6 +8,7 @@ export declare function getAuthCookieOptions(): {
     secure: boolean;
     sameSite: SameSiteMode;
     maxAge: number;
+    domain: string | undefined;
     path: string;
 };
 export declare function signAuthToken(user: AuthUser): string;

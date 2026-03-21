@@ -1,5 +1,54 @@
-// API service layer — swap BASE_URL to your Node.js backend when ready
-const BASE_URL = import.meta.env.VITE_API_URL || "";
+declare global {
+  interface Window {
+    __VORTEX_CONFIG__?: {
+      apiUrl?: string;
+    };
+  }
+}
+
+const LOCAL_HOSTNAMES = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
+function normalizeApiBaseUrl(value?: string | null) {
+  const normalized = value?.trim().replace(/^['"]|['"]$/g, "").replace(/\/+$/, "");
+  return normalized || "";
+}
+
+function isLocalHostname(hostname: string) {
+  return LOCAL_HOSTNAMES.has(hostname.toLowerCase());
+}
+
+function shouldIgnoreConfiguredApiUrl(value: string) {
+  if (!import.meta.env.PROD || typeof window === "undefined") {
+    return false;
+  }
+
+  try {
+    const configuredUrl = new URL(value);
+    return isLocalHostname(configuredUrl.hostname) && !isLocalHostname(window.location.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function resolveApiBaseUrl() {
+  const runtimeApiUrl =
+    typeof window === "undefined"
+      ? ""
+      : normalizeApiBaseUrl(window.__VORTEX_CONFIG__?.apiUrl);
+  const configuredApiUrl = normalizeApiBaseUrl(import.meta.env.VITE_API_URL);
+
+  for (const candidate of [runtimeApiUrl, configuredApiUrl]) {
+    if (!candidate || shouldIgnoreConfiguredApiUrl(candidate)) {
+      continue;
+    }
+
+    return candidate;
+  }
+
+  return "";
+}
+
+const BASE_URL = resolveApiBaseUrl();
 
 export type AuthUser = {
   id: string;
@@ -37,14 +86,24 @@ export class ApiError extends Error {
 }
 
 export function apiUrl(path: string) {
-  return `${BASE_URL}${path}`;
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  return BASE_URL ? `${BASE_URL}${normalizedPath}` : normalizedPath;
 }
 
 export async function apiFetch(path: string, init: RequestInit = {}) {
-  return fetch(apiUrl(path), {
-    credentials: "include",
-    ...init,
-  });
+  try {
+    return await fetch(apiUrl(path), {
+      credentials: "include",
+      ...init,
+    });
+  } catch {
+    throw new ApiError(
+      import.meta.env.PROD
+        ? "Unable to reach the API. Check the deployed API URL and CORS settings."
+        : "Unable to reach the API. Start the backend or set VITE_API_URL.",
+      0,
+    );
+  }
 }
 
 async function parseApiResponse<T>(response: Response): Promise<T> {
@@ -150,7 +209,7 @@ export async function analyzeCV(
     if (options?.jobDescription) {
       formData.append("jobDescription", options.jobDescription);
     }
-    const res = await fetch(`${BASE_URL}/api/cv/analyze`, {
+    const res = await fetch(apiUrl("/api/cv/analyze"), {
       method: "POST",
       body: formData,
     });

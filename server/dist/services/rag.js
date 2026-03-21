@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { OpenAIEmbeddings, ChatOpenAI } from "@langchain/openai";
 import { PromptTemplate } from "@langchain/core/prompts";
 import { query } from "../db/pool.js";
@@ -68,7 +69,8 @@ export async function ensureUser(user) {
     `, [user.id, user.email, user.name, user.avatar || null]);
 }
 export async function createSession(userId, jobUrl) {
-    const inserted = await query(`INSERT INTO sessions (user_id, job_url) VALUES ($1, $2) RETURNING id;`, [userId, jobUrl || null]);
+    const sessionId = randomUUID();
+    const inserted = await query(`INSERT INTO sessions (id, user_id, job_url) VALUES ($1, $2, $3) RETURNING id;`, [sessionId, userId, jobUrl || null]);
     return inserted.rows[0].id;
 }
 export async function upsertSessionArtifacts(input) {
@@ -97,9 +99,10 @@ async function indexRagDocument(params) {
     for (const chunk of chunks) {
         const vector = await embeddings.embedQuery(chunk);
         await query(`
-        INSERT INTO rag_documents (user_id, session_id, source_type, content, metadata, embedding)
-        VALUES ($1, $2, $3, $4, $5::jsonb, $6::vector);
+        INSERT INTO rag_documents (id, user_id, session_id, source_type, content, metadata, embedding)
+        VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::vector);
       `, [
+            randomUUID(),
             params.userId,
             params.sessionId,
             params.sourceType,
@@ -164,9 +167,10 @@ export async function scoreInterviewWithRag(input) {
     const raw = typeof completion.content === "string" ? completion.content : JSON.stringify(completion.content);
     const parsed = parseScoringResponse(raw);
     await query(`
-      INSERT INTO scores (session_id, user_id, overall_score, breakdown, rationale)
-      VALUES ($1, $2, $3, $4::jsonb, $5);
+      INSERT INTO scores (id, session_id, user_id, overall_score, breakdown, rationale)
+      VALUES ($1, $2, $3, $4, $5::jsonb, $6);
     `, [
+        randomUUID(),
         input.sessionId,
         input.userId,
         parsed.overallScore,
