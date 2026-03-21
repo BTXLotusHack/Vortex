@@ -15,11 +15,11 @@ import {
 import { useState } from "react";
 
 const navItems = [
-  { label: "Dashboard", href: "/", icon: LayoutDashboard },
-  { label: "CV Screening", href: "/cv-screening", icon: FileText },
-  { label: "Voice Interview", href: "/voice-interview", icon: Mic },
-  { label: "Technical", href: "/technical-interview", icon: Code2 },
-  { label: "Results", href: "/results", icon: BarChart3 },
+  { label: "Dashboard", href: "/", icon: LayoutDashboard, meta: "Overview" },
+  { label: "CV Screening", href: "/cv-screening", icon: FileText, meta: "Practice module" },
+  { label: "Voice Interview", href: "/voice-interview", icon: Mic, meta: "Practice module" },
+  { label: "Technical", href: "/technical-interview", icon: Code2, meta: "Practice module" },
+  { label: "Results", href: "/results", icon: BarChart3, meta: "Progress history" },
 ];
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
@@ -29,29 +29,33 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuthStore();
 
   const handleLogout = async () => {
-    if (!user){
+    if (!user) {
       navigate("/login");
+      return;
     }
+
     await logout();
     navigate("/login");
   };
 
   return (
-    <div className="flex min-h-screen">
-      {/* Desktop sidebar */}
-      <aside className="hidden md:flex w-64 flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border">
-        <div className="flex h-16 items-center gap-3 px-6 border-b border-sidebar-border">
-          <div className="h-8 w-8 rounded-lg bg-sidebar-primary flex items-center justify-center">
-            <img src="./favicon.png" alt="VORTEX" className="h-6 w-6 rounded-sm object-cover" />
+    <div className="min-h-screen bg-transparent text-foreground md:flex md:items-start md:gap-5 md:px-5 md:py-5">
+      <aside className="noise-overlay hidden h-[calc(100vh-2.5rem)] w-[280px] shrink-0 flex-col overflow-hidden rounded-[2rem] border border-sidebar-border/80 bg-sidebar/95 text-sidebar-foreground shadow-[0_24px_80px_hsl(166_35%_8%/0.35)] md:sticky md:top-5 md:flex">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,hsl(44_50%_70%/0.12),transparent_34%),linear-gradient(180deg,hsl(164_30%_16%/0.96),hsl(167_22%_10%/0.98))]" />
+
+        <div className="relative flex h-20 items-center gap-4 border-b border-sidebar-border/80 px-6">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-sidebar-primary text-sidebar-primary-foreground shadow-[0_14px_36px_hsl(45_60%_70%/0.12)]">
+            <img src="./favicon.png" alt="VORTEX" className="h-7 w-7 rounded-lg object-cover" />
           </div>
           <div className="flex flex-col leading-none">
-            <span className="font-extrabold text-sidebar-accent-foreground tracking-tight text-lg">
-              VORTEX
+            <span className="font-display text-2xl text-sidebar-accent-foreground">VORTEX</span>
+            <span className="mt-1 text-[10px] uppercase tracking-[0.32em] text-sidebar-foreground/60">
+              Interview OS
             </span>
-            <span className="text-xs text-sidebar-accent-foreground/90 uppercase">AI</span>
           </div>
         </div>
-        <nav className="flex-1 px-3 py-4 space-y-1">
+
+        <nav className="relative flex-1 space-y-2 px-4 py-6">
           {navItems.map((item) => {
             const active = pathname === item.href;
             return (
@@ -59,34 +63,66 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 key={item.href}
                 to={item.href}
                 className={cn(
-                  "flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors duration-150",
+                  "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium transition-all duration-300",
                   active
-                    ? "bg-sidebar-accent text-sidebar-primary"
-                    : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                    ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-[0_14px_32px_hsl(45_70%_75%/0.16)]"
+                    : "text-sidebar-foreground/78 hover:bg-sidebar-accent/95 hover:text-sidebar-accent-foreground"
                 )}
               >
-                <item.icon className="h-4 w-4" />
-                {item.label}
+                <div
+                  className={cn(
+                    "flex h-9 w-9 items-center justify-center rounded-xl border transition-colors",
+                    active ? "border-black/10 bg-black/10" : "border-white/10 bg-white/5"
+                  )}
+                >
+                  <item.icon className="h-4 w-4" />
+                </div>
+                <div className="flex flex-col">
+                  <span>{item.label}</span>
+                  <span
+                    className={cn(
+                      "text-[11px]",
+                      active
+                        ? "text-sidebar-primary-foreground/70"
+                        : "text-sidebar-foreground/45"
+                    )}
+                  >
+                    {item.meta}
+                  </span>
+                </div>
               </Link>
             );
           })}
         </nav>
-        <div className="px-6 py-4 border-t border-sidebar-border">
+
+        <div className="relative border-t border-sidebar-border/80 px-6 py-5">
           {user ? (
             <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                {user.avatar ? (
-                  <img src={user.avatar} alt="" className="h-6 w-6 rounded-full" />
-                ) : (
-                  <div className="h-6 w-6 rounded-full bg-sidebar-accent flex items-center justify-center text-xs font-medium text-sidebar-accent-foreground">
-                    {user.name.charAt(0).toUpperCase()}
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                <div className="mb-2 text-[10px] uppercase tracking-[0.28em] text-sidebar-foreground/45">
+                  Signed In
+                </div>
+                <div className="flex items-center gap-3">
+                  {user.avatar ? (
+                    <img src={user.avatar} alt="" className="h-9 w-9 rounded-full" />
+                  ) : (
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sidebar-primary text-sm font-semibold text-sidebar-primary-foreground">
+                      {user.name.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-medium text-sidebar-accent-foreground">
+                      {user.name}
+                    </div>
+                    <div className="text-xs text-sidebar-foreground/50">
+                      Ready for another round
+                    </div>
                   </div>
-                )}
-                <span className="text-xs text-sidebar-foreground/70 truncate">{user.name}</span>
+                </div>
               </div>
               <button
                 onClick={handleLogout}
-                className="flex items-center gap-1.5 text-xs text-sidebar-foreground/50 hover:text-sidebar-foreground transition-colors"
+                className="flex items-center gap-1.5 px-1 text-xs text-sidebar-foreground/55 transition-colors hover:text-sidebar-foreground"
               >
                 <LogOut className="h-3 w-3" /> Sign out
               </button>
@@ -94,7 +130,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           ) : (
             <Link
               to="/login"
-              className="flex items-center gap-1.5 text-xs text-sidebar-foreground/50 hover:text-sidebar-foreground transition-colors"
+              className="flex items-center gap-1.5 text-xs text-sidebar-foreground/55 transition-colors hover:text-sidebar-foreground"
             >
               <LogIn className="h-3 w-3" /> Sign in
             </Link>
@@ -102,26 +138,29 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      {/* Mobile header */}
-      <div className="flex flex-1 flex-col">
-        <header className="md:hidden flex h-14 items-center justify-between px-4 border-b bg-card">
+      <div className="flex min-h-screen flex-1 flex-col">
+        <header className="sticky top-0 z-20 mx-3 mt-3 flex h-16 items-center justify-between rounded-[1.6rem] border border-white/50 bg-white/70 px-4 shadow-luxe backdrop-blur md:hidden">
           <div className="flex items-center gap-2">
-            <div className="h-7 w-7 rounded-md bg-primary flex items-center justify-center">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary">
               <img src="./favicon.png" alt="VORTEX" className="h-5 w-5 rounded-sm object-cover" />
             </div>
-            <span className="font-semibold text-sm">InterviewPrep</span>
+            <div>
+              <span className="font-display text-lg">VORTEX</span>
+              <p className="text-[10px] uppercase tracking-[0.26em] text-muted-foreground">
+                Interview OS
+              </p>
+            </div>
           </div>
           <button
             onClick={() => setMobileOpen(!mobileOpen)}
-            className="p-2 rounded-md hover:bg-secondary active:scale-95 transition-transform"
+            className="rounded-xl border border-border/60 p-2 transition-transform hover:bg-secondary active:scale-95"
           >
             {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
         </header>
 
-        {/* Mobile nav dropdown */}
         {mobileOpen && (
-          <nav className="md:hidden bg-card border-b px-4 py-2 space-y-1 animate-fade-in">
+          <nav className="mx-3 mt-3 space-y-1 rounded-[1.6rem] border border-white/50 bg-white/75 p-3 shadow-luxe backdrop-blur md:hidden animate-fade-in">
             {navItems.map((item) => {
               const active = pathname === item.href;
               return (
@@ -130,10 +169,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   to={item.href}
                   onClick={() => setMobileOpen(false)}
                   className={cn(
-                    "flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors",
+                    "flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium transition-colors",
                     active
-                      ? "bg-primary/10 text-primary"
-                      : "text-muted-foreground hover:bg-secondary"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:bg-secondary/80"
                   )}
                 >
                   <item.icon className="h-4 w-4" />
@@ -144,7 +183,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </nav>
         )}
 
-        <main className="flex-1 overflow-y-auto">{children}</main>
+        <main className="flex-1 px-3 pb-3 md:px-0 md:pb-0 md:pr-3">{children}</main>
       </div>
     </div>
   );

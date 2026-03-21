@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { cn } from "@/lib/utils";
 
 interface ScoreRingProps {
@@ -35,6 +36,7 @@ export function ScoreRing({
   const circumference = 2 * Math.PI * radius;
   const pct = maxScore > 0 ? score / maxScore : 0;
   const offset = circumference * (1 - pct);
+  const gradientId = `score-gradient-${size}-${Math.round(pct * 100)}`;
 
   return (
     <div className={cn("flex flex-col items-center gap-2", className)}>
@@ -44,12 +46,22 @@ export function ScoreRing({
         viewBox={`0 0 ${size} ${size}`}
         className="transform -rotate-90"
       >
+        <defs>
+          <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="hsl(var(--primary))" />
+            <stop
+              offset="100%"
+              stopColor={pct >= 0.5 ? "hsl(var(--score-high))" : "hsl(var(--score-medium))"}
+            />
+          </linearGradient>
+        </defs>
+
         <circle
           cx={size / 2}
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke="hsl(var(--border))"
+          stroke="hsl(var(--border) / 0.55)"
           strokeWidth={strokeWidth}
         />
         <circle
@@ -57,7 +69,11 @@ export function ScoreRing({
           cy={size / 2}
           r={radius}
           fill="none"
-          className={getScoreStroke(pct)}
+          className={cn(
+            "drop-shadow-[0_8px_16px_hsl(var(--primary)/0.18)]",
+            getScoreStroke(pct)
+          )}
+          stroke={`url(#${gradientId})`}
           strokeWidth={strokeWidth}
           strokeLinecap="round"
           strokeDasharray={circumference}
@@ -66,7 +82,7 @@ export function ScoreRing({
             {
               "--score-offset": `${offset}`,
               animation: "score-fill 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards",
-            } as React.CSSProperties
+            } as CSSProperties
           }
         />
         <text
@@ -76,7 +92,7 @@ export function ScoreRing({
           dominantBaseline="central"
           className={cn("fill-foreground font-semibold tabular-nums", getScoreColor(pct))}
           style={{
-            fontSize: size * 0.22,
+            fontSize: size * 0.2,
             transform: "rotate(90deg)",
             transformOrigin: "center",
           }}
@@ -85,7 +101,9 @@ export function ScoreRing({
         </text>
       </svg>
       {label && (
-        <span className="text-sm font-medium text-muted-foreground">{label}</span>
+        <span className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
+          {label}
+        </span>
       )}
     </div>
   );

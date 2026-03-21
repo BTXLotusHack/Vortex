@@ -1,7 +1,11 @@
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ScoreRing } from "@/components/ScoreRing";
 import { FeedbackPanel } from "@/components/FeedbackPanel";
-import { useInterviewStore, type AttemptResult, type ModuleType } from "@/stores/interviewStore";
+import {
+  useInterviewStore,
+  type AttemptResult,
+  type ModuleType,
+} from "@/stores/interviewStore";
 import { ArrowLeft, FileText, Mic, Code2, Calendar, Clock } from "lucide-react";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -19,82 +23,89 @@ export default function Results() {
   const [filter, setFilter] = useState<ModuleType | "all">("all");
   const total = getTotalScore();
 
-  const filtered = filter === "all" ? attempts : attempts.filter((a) => a.module === filter);
+  const filtered = filter === "all" ? attempts : attempts.filter((attempt) => attempt.module === filter);
 
   return (
     <AppLayout>
-      <div className="px-6 py-8 md:px-10 md:py-10 max-w-4xl mx-auto">
+      <div className="max-w-5xl pb-5 pt-0 md:pb-5 md:pt-0">
         <Link
           to="/"
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6"
+          className="mb-6 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" /> Dashboard
         </Link>
 
-        <div className="mb-8 opacity-0 animate-fade-up" style={{ animationFillMode: "forwards" }}>
-          <h1 className="text-2xl font-bold">Results & History</h1>
-          <p className="mt-1.5 text-muted-foreground">
+        <div
+          className="surface-hero mb-8 rounded-[2.25rem] border border-luxe px-6 py-7 opacity-0 animate-fade-up md:px-8"
+          style={{ animationFillMode: "forwards" }}
+        >
+          <h1 className="font-display text-4xl md:text-5xl">Results & History</h1>
+          <p className="mt-3 max-w-2xl text-sm leading-7 text-muted-foreground">
             Review your past attempts and track improvement across modules.
           </p>
         </div>
 
         {attempts.length === 0 ? (
           <div
-            className="rounded-lg border bg-card p-12 text-center opacity-0 animate-fade-up"
+            className="surface-glass rounded-[2rem] border border-luxe p-12 text-center opacity-0 animate-fade-up"
             style={{ animationDelay: "100ms", animationFillMode: "forwards" }}
           >
-            <p className="text-muted-foreground mb-4">No attempts yet. Complete a module to see your results here.</p>
+            <p className="mb-4 text-muted-foreground">
+              No attempts yet. Complete a module to see your results here.
+            </p>
             <Link
               to="/"
-              className="inline-flex items-center gap-2 rounded-lg bg-primary text-primary-foreground px-5 py-2.5 text-sm font-medium hover:bg-primary/90 active:scale-[0.98] transition-all"
+              className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition-all hover:bg-primary/90"
             >
               Go to Dashboard
             </Link>
           </div>
         ) : (
           <>
-            {/* Overall score */}
             <div
-              className="flex flex-col sm:flex-row items-center gap-6 rounded-lg border bg-card p-6 mb-6 opacity-0 animate-fade-up"
+              className="surface-glass mb-6 flex flex-col items-start gap-6 rounded-[2rem] border border-luxe p-6 opacity-0 animate-fade-up sm:flex-row sm:items-center"
               style={{ animationDelay: "100ms", animationFillMode: "forwards" }}
             >
               <ScoreRing score={total.score} maxScore={total.max} size={96} strokeWidth={7} label="Total" />
               <div>
-                <h2 className="font-semibold">Overall Interview Readiness</h2>
-                <p className="text-sm text-muted-foreground mt-1">
+                <div className="mb-2 text-[11px] uppercase tracking-[0.26em] text-muted-foreground">
+                  Overview
+                </div>
+                <h2 className="text-xl font-semibold">Overall Interview Readiness</h2>
+                <p className="mt-2 text-sm leading-7 text-muted-foreground">
                   {attempts.length} total attempt{attempts.length !== 1 ? "s" : ""} across all modules.
                 </p>
               </div>
             </div>
 
-            {/* Filter tabs */}
             <div
-              className="flex gap-2 mb-4 flex-wrap opacity-0 animate-fade-up"
+              className="mb-4 flex flex-wrap gap-2 opacity-0 animate-fade-up"
               style={{ animationDelay: "200ms", animationFillMode: "forwards" }}
             >
               {(["all", "cv-screening", "voice-interview", "technical-interview"] as const).map(
-                (f) => (
+                (value) => (
                   <button
-                    key={f}
-                    onClick={() => { setFilter(f); setSelectedAttempt(null); }}
+                    key={value}
+                    onClick={() => {
+                      setFilter(value);
+                      setSelectedAttempt(null);
+                    }}
                     className={cn(
-                      "rounded-md px-3 py-1.5 text-sm font-medium transition-colors active:scale-[0.97]",
-                      filter === f
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-secondary text-secondary-foreground hover:bg-muted"
+                      "rounded-full px-4 py-2 text-sm font-medium transition-colors active:scale-[0.97]",
+                      filter === value
+                        ? "bg-primary text-primary-foreground shadow-[0_10px_24px_hsl(var(--primary)/0.2)]"
+                        : "bg-white/65 text-secondary-foreground hover:bg-muted"
                     )}
                   >
-                    {f === "all" ? "All" : moduleLabels[f].label}
+                    {value === "all" ? "All" : moduleLabels[value].label}
                   </button>
                 )
               )}
             </div>
 
-            {/* Attempts list */}
             <div className="space-y-2">
               {filtered.map((attempt, i) => {
-                const mod = moduleLabels[attempt.module];
-                const pct = attempt.overallScore / attempt.maxScore;
+                const module = moduleLabels[attempt.module];
                 return (
                   <button
                     key={attempt.id}
@@ -102,8 +113,8 @@ export default function Results() {
                       setSelectedAttempt(selectedAttempt?.id === attempt.id ? null : attempt)
                     }
                     className={cn(
-                      "w-full flex items-center gap-4 rounded-lg border bg-card px-5 py-4 text-left transition-all",
-                      "hover:shadow-sm active:scale-[0.99]",
+                      "surface-glass flex w-full items-center gap-4 rounded-[1.75rem] border border-luxe px-5 py-4 text-left transition-all",
+                      "hover:-translate-y-0.5 active:scale-[0.99]",
                       selectedAttempt?.id === attempt.id && "ring-2 ring-primary/20",
                       "opacity-0 animate-fade-up"
                     )}
@@ -112,12 +123,12 @@ export default function Results() {
                       animationFillMode: "forwards",
                     }}
                   >
-                    <div className="h-9 w-9 rounded-md bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                      {mod.icon}
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                      {module.icon}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm">{mod.label}</p>
-                      <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium">{module.label}</p>
+                      <div className="mt-0.5 flex items-center gap-3 text-xs text-muted-foreground">
                         <span className="flex items-center gap-1">
                           <Calendar className="h-3 w-3" />
                           {new Date(attempt.date).toLocaleDateString()}
@@ -142,11 +153,10 @@ export default function Results() {
               })}
             </div>
 
-            {/* Selected attempt detail */}
             {selectedAttempt && (
               <div className="mt-6">
-                <h3 className="font-semibold mb-3">
-                  Feedback — {moduleLabels[selectedAttempt.module].label}
+                <h3 className="mb-3 font-display text-3xl">
+                  Feedback - {moduleLabels[selectedAttempt.module].label}
                 </h3>
                 <FeedbackPanel feedback={selectedAttempt.feedback} />
               </div>

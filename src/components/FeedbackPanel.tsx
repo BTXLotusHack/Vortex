@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { CheckCircle2, AlertCircle, Lightbulb } from "lucide-react";
+import { Lightbulb } from "lucide-react";
 import type { FeedbackItem } from "@/stores/interviewStore";
 
 interface FeedbackPanelProps {
@@ -22,36 +22,34 @@ export function FeedbackPanel({ feedback, className }: FeedbackPanelProps) {
         return (
           <div
             key={item.category}
-            className="rounded-lg border bg-card p-5 opacity-0 animate-fade-up"
+            className="surface-glass rounded-[1.75rem] border border-luxe p-5 opacity-0 animate-fade-up"
             style={{
               animationDelay: `${i * 100 + 200}ms`,
               animationFillMode: "forwards",
             }}
           >
-            <div className="flex items-center justify-between mb-3">
-              <h4 className="font-semibold text-sm">{item.category}</h4>
+            <div className="mb-3 flex items-center justify-between">
+              <h4 className="text-sm font-semibold">{item.category}</h4>
               <span className="text-sm font-medium tabular-nums text-muted-foreground">
                 {item.score}/{item.maxScore}
               </span>
             </div>
-            <div className="h-1.5 rounded-full bg-muted mb-3 overflow-hidden">
+            <div className="mb-4 h-2 overflow-hidden rounded-full bg-muted/80">
               <div
                 className={cn("h-full rounded-full transition-all duration-700", barColor)}
                 style={{ width: `${pct * 100}%` }}
               />
             </div>
-            <p className="text-sm text-muted-foreground leading-relaxed mb-3">
-              {item.comment}
-            </p>
+            <p className="mb-4 text-sm leading-7 text-muted-foreground">{item.comment}</p>
             {item.suggestions.length > 0 && (
               <div className="space-y-2">
-                {item.suggestions.map((s, j) => (
+                {item.suggestions.map((suggestion, j) => (
                   <div
                     key={j}
-                    className="flex items-start gap-2 text-sm"
+                    className="flex items-start gap-3 rounded-2xl bg-white/45 px-3 py-2 text-sm"
                   >
-                    <Lightbulb className="h-4 w-4 mt-0.5 text-warning shrink-0" />
-                    <span className="text-muted-foreground">{s}</span>
+                    <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+                    <span className="text-muted-foreground">{suggestion}</span>
                   </div>
                 ))}
               </div>

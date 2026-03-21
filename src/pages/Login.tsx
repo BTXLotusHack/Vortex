@@ -18,50 +18,54 @@ export default function Login() {
     setLoading(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
+
     if (error) {
       toast.error(error.message);
-    } else {
-      navigate("/");
+      return;
     }
+
+    navigate("/");
   };
 
   return (
-    <div className="min-h-screen flex">
-      {/* Left panel — branding */}
-      <div className="hidden lg:flex lg:w-[45%] bg-[hsl(155,12%,6%)] relative overflow-hidden items-end p-12">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,hsl(152,55%,34%,0.15),transparent_60%)]" />
-        <div className="relative z-10 max-w-md">
-          <div className="flex items-center gap-3 mb-8">
-            <div className="h-10 w-10 rounded-xl bg-[hsl(152,55%,46%)] flex items-center justify-center">
-              <span className="text-white font-bold text-lg">IP</span>
+    <div className="min-h-screen bg-[linear-gradient(135deg,hsl(165_26%_10%)_0%,hsl(168_24%_8%)_35%,hsl(44_35%_92%)_130%)] lg:flex">
+      <div className="relative hidden overflow-hidden p-12 lg:flex lg:w-[48%] lg:items-end">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,hsl(43_50%_70%/0.16),transparent_20%),radial-gradient(circle_at_top_right,hsl(160_55%_34%/0.22),transparent_40%)]" />
+        <div className="relative z-10 max-w-lg">
+          <div className="mb-8 flex items-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[hsl(42_52%_78%)]">
+              <span className="font-display text-xl text-[hsl(165_25%_12%)]">V</span>
             </div>
-            <span className="text-white/90 font-semibold text-xl tracking-tight">InterviewPrep</span>
+            <span className="font-display text-2xl text-white/90">VORTEX</span>
           </div>
-          <h2 className="text-3xl font-bold text-white leading-[1.15]" style={{ lineHeight: "1.15" }}>
-            Ace every stage of your next interview.
+          <h2 className="font-display text-5xl leading-[1.02] text-white">
+            Enter a smoother kind of interview prep.
           </h2>
-          <p className="mt-4 text-white/50 text-base leading-relaxed">
-            AI-powered CV analysis, voice practice, and technical mock interviews — all in one place.
+          <p className="mt-5 text-base leading-8 text-white/60">
+            AI-powered CV analysis, voice rehearsal, and technical rounds wrapped in
+            a calmer, more premium workflow.
           </p>
         </div>
       </div>
 
-      {/* Right panel — form */}
-      <div className="flex-1 flex items-center justify-center px-6 py-12">
+      <div className="flex flex-1 items-center justify-center px-6 py-8 lg:px-10">
         <div
-          className="w-full max-w-sm opacity-0 animate-fade-up"
+          className="surface-glass w-full max-w-md rounded-[2rem] border border-white/45 p-7 opacity-0 animate-fade-up md:p-8"
           style={{ animationFillMode: "forwards" }}
         >
           <div className="mb-8">
-            <div className="lg:hidden flex items-center gap-2 mb-6">
-              <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-                <span className="text-primary-foreground font-bold text-sm">IP</span>
+            <div className="mb-6 flex items-center gap-2 lg:hidden">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary">
+                <span className="font-display text-lg text-primary-foreground">V</span>
               </div>
-              <span className="font-semibold tracking-tight">InterviewPrep</span>
+              <span className="font-display text-xl">VORTEX</span>
             </div>
-            <h1 className="text-2xl font-bold">Welcome back</h1>
-            <p className="text-muted-foreground text-sm mt-1">
-              Sign in to continue your prep
+            <div className="mb-3 text-[11px] uppercase tracking-[0.28em] text-primary">
+              Welcome back
+            </div>
+            <h1 className="font-display text-4xl leading-none">Sign in</h1>
+            <p className="mt-3 text-sm leading-7 text-muted-foreground">
+              Continue your prep with the latest scores, feedback, and practice history.
             </p>
           </div>
 
@@ -83,7 +87,7 @@ export default function Login() {
               <Input
                 id="password"
                 type="password"
-                placeholder="••••••••"
+                placeholder="Enter your password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -101,9 +105,9 @@ export default function Login() {
             </Button>
           </form>
 
-          <p className="text-center text-sm text-muted-foreground mt-6">
+          <p className="mt-6 text-center text-sm text-muted-foreground">
             Don't have an account?{" "}
-            <Link to="/register" className="text-primary font-medium hover:underline">
+            <Link to="/register" className="font-medium text-primary hover:underline">
               Create one
             </Link>
           </p>

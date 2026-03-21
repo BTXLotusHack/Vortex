@@ -28,15 +28,17 @@ export function ModuleCard({
     <Link
       to={href}
       className={cn(
-        "group relative flex flex-col gap-4 rounded-lg border bg-card p-6",
-        "shadow-sm hover:shadow-md transition-shadow duration-300",
-        "opacity-0 animate-fade-up active:scale-[0.98] transition-transform",
+        "group surface-glass noise-overlay relative flex min-h-[280px] flex-col gap-5 overflow-hidden rounded-[2rem] border border-luxe p-6",
+        "shadow-luxe transition-all duration-500 hover:-translate-y-1.5 hover:shadow-[0_24px_50px_hsl(166_35%_12%/0.14)]",
+        "opacity-0 animate-fade-up active:scale-[0.985]",
         className
       )}
       style={{ animationDelay: `${delay}ms`, animationFillMode: "forwards" }}
     >
-      <div className="flex items-start justify-between">
-        <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-primary/10 text-primary">
+      <div className="absolute right-[-3.5rem] top-[-3.5rem] h-32 w-32 rounded-full bg-primary/10 blur-3xl transition-transform duration-500 group-hover:scale-125" />
+
+      <div className="relative flex items-start justify-between">
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-primary/10 bg-primary/10 text-primary shadow-[inset_0_1px_0_hsl(0_0%_100%/0.5)]">
           {icon}
         </div>
         {lastScore && (
@@ -49,16 +51,21 @@ export function ModuleCard({
           />
         )}
       </div>
-      <div className="space-y-1.5">
-        <h3 className="text-lg font-semibold leading-snug">{title}</h3>
-        <p className="text-sm text-muted-foreground leading-relaxed">{description}</p>
+
+      <div className="relative space-y-2">
+        <div className="text-[11px] uppercase tracking-[0.28em] text-muted-foreground">
+          Module
+        </div>
+        <h3 className="text-[1.35rem] font-semibold leading-snug text-balance">{title}</h3>
+        <p className="text-sm leading-7 text-muted-foreground">{description}</p>
       </div>
-      <div className="mt-auto flex items-center justify-between pt-2">
-        <span className="text-xs text-muted-foreground tabular-nums">
+
+      <div className="relative mt-auto flex items-center justify-between border-t border-border/60 pt-4">
+        <span className="text-xs tabular-nums text-muted-foreground">
           {attempts > 0 ? `${attempts} attempt${attempts !== 1 ? "s" : ""}` : "Not started"}
         </span>
-        <span className="flex items-center gap-1 text-sm font-medium text-primary opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-          Start <ArrowRight className="h-4 w-4" />
+        <span className="flex items-center gap-1 text-sm font-medium text-primary transition-transform duration-300 group-hover:translate-x-1">
+          Explore <ArrowRight className="h-4 w-4" />
         </span>
       </div>
     </Link>
