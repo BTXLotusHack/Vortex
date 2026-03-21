@@ -42,7 +42,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       <aside className="hidden md:flex w-64 flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border">
         <div className="flex h-16 items-center gap-3 px-6 border-b border-sidebar-border">
           <div className="h-8 w-8 rounded-lg bg-sidebar-primary flex items-center justify-center">
-            <img src="./favicon.ico" alt="VORTEX" className="h-6 w-6 rounded-sm object-cover" />
+            <img src="./favicon.png" alt="VORTEX" className="h-6 w-6 rounded-sm object-cover" />
           </div>
           <div className="flex flex-col leading-none">
             <span className="font-extrabold text-sidebar-accent-foreground tracking-tight text-lg">
@@ -107,7 +107,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         <header className="md:hidden flex h-14 items-center justify-between px-4 border-b bg-card">
           <div className="flex items-center gap-2">
             <div className="h-7 w-7 rounded-md bg-primary flex items-center justify-center">
-              <img src="/favicon.ico" alt="VORTEX" className="h-5 w-5 rounded-sm object-cover" />
+              <img src="./favicon.png" alt="VORTEX" className="h-5 w-5 rounded-sm object-cover" />
             </div>
             <span className="font-semibold text-sm">InterviewPrep</span>
           </div>
