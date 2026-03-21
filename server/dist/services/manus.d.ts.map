@@ -1,0 +1,1 @@
+{"version":3,"file":"manus.d.ts","sourceRoot":"","sources":["../../src/services/manus.ts"],"names":[],"mappings":"AAEA,KAAK,iBAAiB,GAAG;IACvB,OAAO,EAAE,MAAM,CAAC;IAChB,SAAS,EAAE,MAAM,EAAE,CAAC;CACrB,CAAC;AA4CF,wBAAsB,iBAAiB,CAAC,MAAM,EAAE,MAAM,GAAG,OAAO,CAAC,iBAAiB,CAAC,CA8BlF"}

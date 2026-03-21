@@ -1,0 +1,79 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 210 40% 98%;
+    --foreground: 230 24% 18%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 230 24% 18%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 230 24% 18%;
+
+    --primary: 223 68% 56%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 225 40% 95%;
+    --secondary-foreground: 230 24% 20%;
+
+    --muted: 222 38% 94%;
+    --muted-foreground: 228 16% 43%;
+
+    --accent: 253 62% 92%;
+    --accent-foreground: 247 30% 30%;
+
+    --destructive: 0 72% 58%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 222 30% 88%;
+    --input: 222 30% 86%;
+    --ring: 223 68% 56%;
+
+    --radius: 0.75rem;
+
+    --success: 164 52% 42%;
+    --warning: 38 92% 50%;
+    --score-high: 164 52% 42%;
+    --score-medium: 38 92% 50%;
+    --score-low: 0 68% 52%;
+
+    --sidebar-background: 228 38% 15%;
+    --sidebar-foreground: 225 24% 82%;
+    --sidebar-primary: 223 68% 58%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 243 30% 24%;
+    --sidebar-accent-foreground: 236 38% 92%;
+    --sidebar-border: 231 26% 24%;
+    --sidebar-ring: 223 68% 58%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv11", "ss01";
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    text-wrap: balance;
+    @apply tracking-tight;
+  }
+
+  p {
+    text-wrap: pretty;
+    overflow-wrap: break-word;
+  }
+}
+
+@layer utilities {
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+}
