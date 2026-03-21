@@ -29,6 +29,15 @@ function getCookieMaxAge() {
         ? parsed
         : DEFAULT_COOKIE_MAX_AGE_MS;
 }
+function getSameSiteMode() {
+    const raw = process.env.AUTH_COOKIE_SAME_SITE?.toLowerCase();
+    if (raw === "strict" || raw === "lax" || raw === "none") {
+        return raw;
+    }
+    // CloudFront frontend -> App Runner API is cross-site, so production
+    // needs SameSite=None for auth cookies to be sent on credentialed requests.
+    return process.env.NODE_ENV === "production" ? "none" : "strict";
+}
 function parseCookies(cookieHeader) {
     if (!cookieHeader)
         return {};
@@ -44,7 +53,7 @@ export function getAuthCookieOptions() {
     return {
         httpOnly: true,
         secure: shouldUseSecureCookies(),
-        sameSite: "strict",
+        sameSite: getSameSiteMode(),
         maxAge: getCookieMaxAge(),
         path: "/",
     };
@@ -83,7 +92,7 @@ export function clearAuthCookie(res) {
     res.clearCookie(AUTH_COOKIE_NAME, {
         httpOnly: true,
         secure: shouldUseSecureCookies(),
-        sameSite: "strict",
+        sameSite: getSameSiteMode(),
         path: "/",
     });
 }
