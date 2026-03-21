@@ -49,6 +49,7 @@ export default function InterviewPipeline() {
     setLatestCVContext,
   } = useInterviewStore();
 
+  const cvAttempt = getLatestAttempt("cv-screening");
   const voiceAttempt = getLatestAttempt("voice-interview");
   const technicalAttempt = getLatestAttempt("technical-interview");
 
@@ -76,6 +77,36 @@ export default function InterviewPipeline() {
       ),
     [currentJobDescription, result, savedAnalysis]
   );
+  const pipelineComplete =
+    Boolean(cvAttempt) &&
+    (!pipeline.voiceRequired || Boolean(voiceAttempt)) &&
+    (!pipeline.technicalRequired || Boolean(technicalAttempt));
+
+  const pipelineAttempts = [
+    cvAttempt,
+    pipeline.voiceRequired ? voiceAttempt : undefined,
+    pipeline.technicalRequired ? technicalAttempt : undefined,
+  ].filter(Boolean);
+
+  const totalPoints = pipelineAttempts.reduce(
+    (acc, attempt) => {
+      acc.score += attempt!.overallScore;
+      acc.max += attempt!.maxScore;
+      return acc;
+    },
+    { score: 0, max: 0 }
+  );
+
+  const allFeedback = pipelineAttempts.flatMap((attempt) => attempt!.feedback);
+  const strongestSignals = [...allFeedback]
+    .sort((a, b) => b.score / b.maxScore - a.score / a.maxScore)
+    .slice(0, 4);
+  const weakestSignals = [...allFeedback]
+    .sort((a, b) => a.score / a.maxScore - b.score / b.maxScore)
+    .slice(0, 4);
+  const improvementActions = allFeedback
+    .flatMap((item) => item.suggestions.map((suggestion) => `${item.category}: ${suggestion}`))
+    .slice(0, 6);
 
   const handleFile = (selected: File) => {
     if (selected.type === "application/pdf" || selected.name.endsWith(".pdf") || selected.name.endsWith(".docx")) {
@@ -500,6 +531,79 @@ export default function InterviewPipeline() {
                 Review full results <ArrowRight className="h-4 w-4" />
               </Link>
             </div>
+
+            {pipelineComplete && (
+              <div className="surface-glass rounded-[2rem] border border-luxe p-6">
+                <p className="text-[11px] uppercase tracking-[0.26em] text-muted-foreground">
+                  Final Summary
+                </p>
+                <div className="mt-4 flex flex-col gap-5 sm:flex-row sm:items-center">
+                  <ScoreRing
+                    score={totalPoints.score}
+                    maxScore={Math.max(totalPoints.max, 1)}
+                    size={96}
+                    strokeWidth={7}
+                    label="Total"
+                  />
+                  <div>
+                    <h2 className="text-xl font-semibold">Completed pipeline score</h2>
+                    <p className="mt-2 text-sm leading-7 text-muted-foreground">
+                      {totalPoints.score}/{totalPoints.max} across the completed stages in this pipeline.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-6 grid gap-4 md:grid-cols-3">
+                  {pipelineAttempts.map((attempt) => (
+                    <div key={attempt!.id} className="rounded-2xl bg-card px-4 py-4">
+                      <p className="text-sm font-semibold">
+                        {attempt!.module === "cv-screening"
+                          ? "CV"
+                          : attempt!.module === "voice-interview"
+                            ? "Voice"
+                            : "Technical"}
+                      </p>
+                      <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                        {attempt!.overallScore}/{attempt!.maxScore}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-6 space-y-4">
+                  <div className="rounded-2xl bg-score-high/10 px-4 py-4">
+                    <p className="text-sm font-semibold text-score-high">What you were good at</p>
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                      {strongestSignals.length
+                        ? strongestSignals
+                            .map((item) => `${item.category} (${item.score}/${item.maxScore})`)
+                            .join(", ")
+                        : "No strong signals available yet."}
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl bg-score-low/10 px-4 py-4">
+                    <p className="text-sm font-semibold text-score-low">Where you lost points</p>
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                      {weakestSignals.length
+                        ? weakestSignals
+                            .map((item) => `${item.category} (${item.score}/${item.maxScore})`)
+                            .join(", ")
+                        : "No weak signals available yet."}
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl bg-card px-4 py-4">
+                    <p className="text-sm font-semibold">What to improve next</p>
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                      {improvementActions.length
+                        ? improvementActions.join(" • ")
+                        : "Complete more stages to unlock specific next actions."}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

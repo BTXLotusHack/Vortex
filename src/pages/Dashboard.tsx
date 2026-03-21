@@ -17,6 +17,54 @@ export default function Dashboard() {
   const hasAnyAttempt = cvAttempt || voiceAttempt || techAttempt;
   const interviewsUnlocked = pipeline.cvUploaded && Boolean(candidateProfile?.jobFitSummary);
 
+  const moduleInsightRows = (["cv-screening", "voice-interview", "technical-interview"] as const)
+    .map((mod) => {
+      const attempts = getModuleAttempts(mod);
+      const latest = attempts[0];
+      if (!latest) return null;
+
+      const previous = attempts[1];
+      const improvement = getImprovement(mod);
+      const label =
+        mod === "cv-screening"
+          ? "CV"
+          : mod === "voice-interview"
+            ? "Voice"
+            : "Technical";
+
+      const latestFeedback = [...latest.feedback].sort(
+        (a, b) => b.score / b.maxScore - a.score / a.maxScore
+      );
+      const strongestAreas = latestFeedback.slice(0, 2);
+      const weakestAreas = [...latestFeedback]
+        .sort((a, b) => a.score / a.maxScore - b.score / b.maxScore)
+        .slice(0, 2);
+      const nextActions = latest.feedback
+        .flatMap((item) => item.suggestions)
+        .filter(Boolean)
+        .slice(0, 3);
+
+      const latestRatio = latest.maxScore ? latest.overallScore / latest.maxScore : 0;
+      const previousRatio = previous?.maxScore ? previous.overallScore / previous.maxScore : null;
+      const delta =
+        previousRatio === null
+          ? null
+          : Math.round((latestRatio - previousRatio) * 100);
+
+      return {
+        mod,
+        label,
+        latest,
+        previous,
+        improvement,
+        strongestAreas,
+        weakestAreas,
+        nextActions,
+        delta,
+      };
+    })
+    .filter(Boolean);
+
   return (
     <AppLayout>
       <div className="max-w-6xl pb-5 pt-0 md:pb-5 md:pt-0">
@@ -152,53 +200,88 @@ export default function Dashboard() {
               </p>
             </div>
             <div className="grid gap-4 lg:grid-cols-3">
-              {(["cv-screening", "voice-interview", "technical-interview"] as const).map(
-                (mod) => {
-                  const improvement = getImprovement(mod);
-                  if (!improvement) return null;
+              {moduleInsightRows.map((item) => (
+                <div
+                  key={item.mod}
+                  className="surface-glass rounded-[1.75rem] border border-luxe px-5 py-5"
+                >
+                  <div className="mb-4 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold">{item.label}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Latest score {item.latest.overallScore}/{item.latest.maxScore}
+                        {item.delta !== null
+                          ? item.delta >= 0
+                            ? ` • up ${item.delta} pts vs previous`
+                            : ` • down ${Math.abs(item.delta)} pts vs previous`
+                          : " • first scored attempt"}
+                      </p>
+                    </div>
+                    <span className="text-[10px] uppercase tracking-[0.24em] text-muted-foreground">
+                      Signals
+                    </span>
+                  </div>
 
-                  const label =
-                    mod === "cv-screening"
-                      ? "CV"
-                      : mod === "voice-interview"
-                        ? "Voice"
-                        : "Technical";
-
-                  return (
-                    <div
-                      key={mod}
-                      className="surface-glass rounded-[1.75rem] border border-luxe px-5 py-5"
-                    >
-                      <div className="mb-4 flex items-center justify-between">
-                        <p className="text-sm font-semibold">{label}</p>
-                        <span className="text-[10px] uppercase tracking-[0.24em] text-muted-foreground">
-                          Signals
-                        </span>
+                  <div className="space-y-3">
+                    {item.improvement?.improved && item.improvement.improved.length > 0 && (
+                      <div className="rounded-2xl bg-score-high/10 px-3 py-3 text-sm text-score-high">
+                        <div className="mb-1 flex items-center gap-2 font-medium">
+                          <TrendingUp className="h-3.5 w-3.5" />
+                          Improved
+                        </div>
+                        <div className="leading-6">{item.improvement.improved.join(", ")}</div>
                       </div>
-                      <div className="space-y-3">
-                        {improvement.improved.length > 0 && (
-                          <div className="rounded-2xl bg-score-high/10 px-3 py-3 text-sm text-score-high">
-                            <div className="mb-1 flex items-center gap-2 font-medium">
-                              <TrendingUp className="h-3.5 w-3.5" />
-                              Improved
-                            </div>
-                            <div className="leading-6">{improvement.improved.join(", ")}</div>
-                          </div>
-                        )}
-                        {improvement.needsWork.length > 0 && (
-                          <div className="rounded-2xl bg-score-low/10 px-3 py-3 text-sm text-score-low">
-                            <div className="mb-1 flex items-center gap-2 font-medium">
-                              <TrendingDown className="h-3.5 w-3.5" />
-                              Needs work
-                            </div>
-                            <div className="leading-6">{improvement.needsWork.join(", ")}</div>
-                          </div>
-                        )}
+                    )}
+
+                    {item.improvement?.needsWork && item.improvement.needsWork.length > 0 && (
+                      <div className="rounded-2xl bg-score-low/10 px-3 py-3 text-sm text-score-low">
+                        <div className="mb-1 flex items-center gap-2 font-medium">
+                          <TrendingDown className="h-3.5 w-3.5" />
+                          Needs work
+                        </div>
+                        <div className="leading-6">{item.improvement.needsWork.join(", ")}</div>
+                      </div>
+                    )}
+
+                    <div className="rounded-2xl bg-card px-3 py-3">
+                      <div className="mb-1 text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
+                        Strongest areas
+                      </div>
+                      <div className="text-sm leading-6 text-foreground">
+                        {item.strongestAreas.length
+                          ? item.strongestAreas
+                              .map((area) => `${area.category} (${area.score}/${area.maxScore})`)
+                              .join(", ")
+                          : "Not enough signal yet."}
                       </div>
                     </div>
-                  );
-                }
-              )}
+
+                    <div className="rounded-2xl bg-card px-3 py-3">
+                      <div className="mb-1 text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
+                        Biggest gaps
+                      </div>
+                      <div className="text-sm leading-6 text-foreground">
+                        {item.weakestAreas.length
+                          ? item.weakestAreas
+                              .map((area) => `${area.category} (${area.score}/${area.maxScore})`)
+                              .join(", ")
+                          : "Not enough signal yet."}
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl bg-card px-3 py-3">
+                      <div className="mb-1 text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
+                        Next focus
+                      </div>
+                      <div className="text-sm leading-6 text-foreground">
+                        {item.nextActions.length
+                          ? item.nextActions.join(" • ")
+                          : "Complete another round to unlock more targeted suggestions."}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         )}
