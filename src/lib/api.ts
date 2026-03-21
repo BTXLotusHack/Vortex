@@ -630,6 +630,105 @@ export async function evaluateAnswer(
   };
 }
 
+export async function evaluateVoiceTranscript(payload: {
+  transcript: Array<{ role: "user" | "agent"; message: string }>;
+  jobRole: string;
+  jobDescription?: string;
+  candidateProfile?: CandidateProfilePayload | null;
+}): Promise<{
+  overallScore: number;
+  maxScore: number;
+  feedback: Array<{
+    category: string;
+    score: number;
+    maxScore: number;
+    comment: string;
+    suggestions: string[];
+  }>;
+  summary: {
+    gainedPoints: string[];
+    lostPoints: string[];
+  };
+}> {
+  try {
+    const res = await apiFetch("/api/interview/evaluate-voice-session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (res.ok) {
+      return res.json();
+    }
+  } catch {
+    // Fall back to local mock below when backend is unavailable.
+  }
+
+  await new Promise((r) => setTimeout(r, 1200));
+  return {
+    overallScore: 76,
+    maxScore: 100,
+    feedback: [
+      {
+        category: "Communication Clarity",
+        score: 21,
+        maxScore: 25,
+        comment:
+          "Answers were generally clear and understandable, though some responses could have been more structured and concise.",
+        suggestions: [
+          "Use a tighter answer structure",
+          "Lead with the outcome before details",
+        ],
+      },
+      {
+        category: "Behavioral Depth",
+        score: 18,
+        maxScore: 25,
+        comment:
+          "You gave relevant examples, but some did not fully explain the reasoning, trade-offs, or final impact.",
+        suggestions: [
+          "Explain your decisions more explicitly",
+          "Add the result and what you learned",
+        ],
+      },
+      {
+        category: "Role Relevance",
+        score: 20,
+        maxScore: 25,
+        comment:
+          "Most of the discussion aligned well with the role, but some examples could have been tied back to the JD more directly.",
+        suggestions: [
+          "Connect examples to the role requirements",
+          "Name the skill being demonstrated",
+        ],
+      },
+      {
+        category: "Professional Presence",
+        score: 17,
+        maxScore: 25,
+        comment:
+          "The overall tone was professional, but a few answers would benefit from more confidence and a stronger finish.",
+        suggestions: [
+          "Reduce filler phrases",
+          "Close each answer with a clear takeaway",
+        ],
+      },
+    ],
+    summary: {
+      gainedPoints: [
+        "Clear spoken communication",
+        "Relevant experience examples",
+        "Professional tone",
+      ],
+      lostPoints: [
+        "Sharper structure",
+        "Stronger trade-off explanation",
+        "More confident answer endings",
+      ],
+    },
+  };
+}
+
 export async function signup(payload: {
   name: string;
   email: string;

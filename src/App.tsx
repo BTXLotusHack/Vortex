@@ -12,6 +12,7 @@ import InterviewPipeline from "./pages/InterviewPipeline";
 import VoiceInterview from "./pages/VoiceInterview";
 import TechnicalInterview from "./pages/TechnicalInterview";
 import Results from "./pages/Results";
+import PipelineSummary from "./pages/PipelineSummary";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -58,6 +59,7 @@ const App = () => (
                 element={<TechnicalInterview />}
               />
               <Route path="/results" element={<Results />} />
+              <Route path="/pipeline-summary/:runId" element={<PipelineSummary />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>

@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ScoreRing } from "@/components/ScoreRing";
 import { analyzeCV, analyzeUploadedCV, requestCVUploadUrl, uploadCVToPresignedUrl, type CVAnalysisResult } from "@/lib/api";
-import { useInterviewStore } from "@/stores/interviewStore";
+import { useInterviewStore, type AttemptResult, type FeedbackItem, type ModuleType } from "@/stores/interviewStore";
 import { ArrowLeft, ArrowRight, CheckCircle2, Code2, FileText, Loader2, Mic, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -25,6 +25,42 @@ function buildTechnicalBrief(jobDescription: string, result: CVAnalysisResult | 
   return parts.filter(Boolean).join("\n\n");
 }
 
+function getModuleLabel(module: ModuleType) {
+  switch (module) {
+    case "cv-screening":
+      return "CV";
+    case "voice-interview":
+      return "Voice";
+    case "technical-interview":
+      return "Technical";
+  }
+}
+
+function getModuleSurface(module: ModuleType) {
+  switch (module) {
+    case "cv-screening":
+      return "border-primary/15 bg-primary/5";
+    case "voice-interview":
+      return "border-score-high/20 bg-score-high/10";
+    case "technical-interview":
+      return "border-score-medium/20 bg-score-medium/10";
+  }
+}
+
+function splitSuggestionDetails(suggestions: string[]) {
+  return suggestions.reduce(
+    (acc, suggestion) => {
+      if (/^Missing:/i.test(suggestion)) {
+        acc.expectedAnswerPoints.push(suggestion.replace(/^Missing:\s*/i, "").trim());
+      } else {
+        acc.coachingTips.push(suggestion.trim());
+      }
+      return acc;
+    },
+    { expectedAnswerPoints: [] as string[], coachingTips: [] as string[] }
+  );
+}
+
 export default function InterviewPipeline() {
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -41,6 +77,7 @@ export default function InterviewPipeline() {
     candidateProfile,
     pipeline,
     getLatestAttempt,
+    addAttempt,
     setJobRole,
     setJobDescription,
     setCandidateProfile,
@@ -49,6 +86,7 @@ export default function InterviewPipeline() {
     setLatestCVContext,
   } = useInterviewStore();
 
+  const cvAttempt = getLatestAttempt("cv-screening");
   const voiceAttempt = getLatestAttempt("voice-interview");
   const technicalAttempt = getLatestAttempt("technical-interview");
 
@@ -76,7 +114,52 @@ export default function InterviewPipeline() {
       ),
     [currentJobDescription, result, savedAnalysis]
   );
+  const pipelineComplete =
+    Boolean(cvAttempt) &&
+    Boolean(voiceAttempt) &&
+    Boolean(technicalAttempt);
+  const pipelineAttempts = [cvAttempt, voiceAttempt, technicalAttempt].filter(
+    (attempt): attempt is AttemptResult => Boolean(attempt)
+  );
+  const totalPoints = pipelineAttempts.reduce(
+    (acc, attempt) => {
+      acc.score += attempt.overallScore;
+      acc.max += attempt.maxScore;
+      return acc;
+    },
+    { score: 0, max: 0 }
+  );
+  const allFeedback = pipelineAttempts.flatMap((attempt) => attempt.feedback);
+  const strongestSignals = [...allFeedback]
+    .sort((a, b) => b.score / b.maxScore - a.score / a.maxScore)
+    .slice(0, 4);
+  const weakestSignals = [...allFeedback]
+    .sort((a, b) => a.score / a.maxScore - b.score / b.maxScore)
+    .slice(0, 4);
+  const improvementActions = allFeedback
+    .flatMap((item) => item.suggestions.map((suggestion) => `${item.category}: ${suggestion}`))
+    .slice(0, 6);
+  const totalCoverage = totalPoints.max ? Math.round((totalPoints.score / totalPoints.max) * 100) : 0;
+  const totalLostPoints = Math.max(totalPoints.max - totalPoints.score, 0);
+  const expectedAnswerGaps = allFeedback.reduce(
+    (count, item) => count + splitSuggestionDetails(item.suggestions).expectedAnswerPoints.length,
+    0
+  );
+  const stageBreakdowns = pipelineAttempts.map((attempt) => {
+    const coverage = attempt.maxScore ? Math.round((attempt.overallScore / attempt.maxScore) * 100) : 0;
+    const weakestCategory =
+      [...attempt.feedback].sort((a, b) => b.maxScore - b.score - (a.maxScore - a.score))[0] || null;
+    const strongestCategory =
+      [...attempt.feedback].sort((a, b) => b.score / b.maxScore - a.score / a.maxScore)[0] || null;
 
+    return {
+      attempt,
+      coverage,
+      lostPoints: Math.max(attempt.maxScore - attempt.overallScore, 0),
+      weakestCategory,
+      strongestCategory,
+    };
+  });
   const handleFile = (selected: File) => {
     if (selected.type === "application/pdf" || selected.name.endsWith(".pdf") || selected.name.endsWith(".docx")) {
       setFile(selected);
@@ -131,6 +214,19 @@ export default function InterviewPipeline() {
       }
 
       setResult(response);
+      const sessionId = crypto.randomUUID();
+      const normalizedFeedback: FeedbackItem[] = [
+        ...response.feedback,
+        ...(response.insights
+          ? [{
+              category: "Process Insight",
+              score: Math.max(0, Math.min(25, Math.round(response.overallScore / 4))),
+              maxScore: 25,
+              comment: `Strengths: ${response.insights.strengths.join("; ") || "N/A"} | Risks: ${response.insights.risks.join("; ") || "N/A"}`,
+              suggestions: response.insights.nextSteps,
+            }]
+          : []),
+      ];
       setCandidateProfile(response.candidateProfile || null);
       setLatestCVAnalysis({
         overallScore: response.overallScore,
@@ -141,8 +237,22 @@ export default function InterviewPipeline() {
       updatePipeline({
         active: true,
         cvUploaded: true,
-        recommendedNextStep: pipeline.voiceRequired ? "voice" : pipeline.technicalRequired ? "technical" : "complete",
+        voiceRequired: true,
+        technicalRequired: true,
+        recommendedNextStep: "voice",
         lastCompletedStep: "cv",
+        currentSessionId: sessionId,
+      });
+      addAttempt({
+        id: crypto.randomUUID(),
+        module: "cv-screening",
+        date: new Date().toISOString(),
+        overallScore: response.overallScore,
+        maxScore: 100,
+        feedback: normalizedFeedback,
+        jobRole: currentJobRole,
+        jobDescription: currentJobDescription,
+        pipelineSessionId: sessionId,
       });
     } catch (error) {
       console.error(error);
@@ -162,7 +272,7 @@ export default function InterviewPipeline() {
       active: true,
       recommendedNextStep: "voice",
       voiceRequired: true,
-      technicalRequired: pipeline.technicalRequired,
+      technicalRequired: true,
     });
     navigate("/voice-interview?from=pipeline");
   };
@@ -172,12 +282,18 @@ export default function InterviewPipeline() {
       toast.error("Analyze the CV first so the technical interview can be tailored.");
       return;
     }
+    updatePipeline({
+      active: true,
+      recommendedNextStep: "technical",
+      voiceRequired: true,
+      technicalRequired: true,
+    });
     navigate("/technical-interview?from=pipeline");
   };
 
   return (
     <AppLayout>
-      <div className="max-w-5xl pb-5 pt-0 md:pb-5 md:pt-0">
+      <div className="max-w-7xl pb-5 pt-0 md:pb-5 md:pt-0">
         <Link
           to="/dashboard"
           className="mb-6 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
@@ -203,7 +319,7 @@ export default function InterviewPipeline() {
           </div>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+        <div className="grid gap-6 lg:grid-cols-2">
           <div className="space-y-6">
             <div className="surface-glass rounded-[2rem] border border-luxe p-6">
               <div className="mb-4 flex items-center justify-between">
@@ -338,7 +454,7 @@ export default function InterviewPipeline() {
                   </div>
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-3">
+                <div className="space-y-4">
                   <div className="rounded-2xl bg-score-high/10 px-4 py-4">
                     <p className="text-sm font-semibold text-score-high">Strengths</p>
                     <p className="mt-2 text-sm leading-6 text-muted-foreground">
@@ -372,82 +488,10 @@ export default function InterviewPipeline() {
                 )}
               </div>
             )}
+
           </div>
 
           <div className="space-y-6">
-            <div className="surface-glass rounded-[2rem] border border-luxe p-6">
-              <p className="text-[11px] uppercase tracking-[0.26em] text-muted-foreground">Step 2</p>
-              <h2 className="mt-2 text-xl font-semibold">Choose the interview path</h2>
-              <p className="mt-2 text-sm leading-7 text-muted-foreground">
-                Voice and technical rounds are optional. The technical round can still be generated from the CV and JD alone, but voice gives you an additional behavioral signal before deeper testing.
-              </p>
-
-              <div className="mt-5 space-y-4">
-                <label className="flex items-start gap-3 rounded-2xl border bg-card px-4 py-4">
-                  <input
-                    type="checkbox"
-                    checked={pipeline.voiceRequired}
-                    onChange={(event) =>
-                      updatePipeline({
-                        voiceRequired: event.target.checked,
-                        recommendedNextStep: event.target.checked ? "voice" : "technical",
-                      })
-                    }
-                    className="mt-1 h-4 w-4 rounded border"
-                  />
-                  <div>
-                    <div className="flex items-center gap-2 text-sm font-medium">
-                      <Mic className="h-4 w-4 text-primary" /> Voice interview
-                    </div>
-                    <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                      Use ElevenAgents-style live conversation to probe communication, composure, and behavioral fit.
-                    </p>
-                  </div>
-                </label>
-
-                <label className="flex items-start gap-3 rounded-2xl border bg-card px-4 py-4">
-                  <input
-                    type="checkbox"
-                    checked={pipeline.technicalRequired}
-                    onChange={(event) => updatePipeline({ technicalRequired: event.target.checked })}
-                    className="mt-1 h-4 w-4 rounded border"
-                  />
-                  <div>
-                    <div className="flex items-center gap-2 text-sm font-medium">
-                      <Code2 className="h-4 w-4 text-primary" /> Technical interview
-                    </div>
-                    <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                      Generate role-matched questions from the JD and the candidate skill signals already extracted from the CV.
-                    </p>
-                  </div>
-                </label>
-              </div>
-
-              <div className="mt-6 space-y-3">
-                <button
-                  onClick={launchVoice}
-                  disabled={!pipeline.cvUploaded || !pipeline.voiceRequired}
-                  className={cn(
-                    "flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-medium transition-all",
-                    "bg-primary text-primary-foreground hover:bg-primary/90",
-                    "disabled:cursor-not-allowed disabled:opacity-40"
-                  )}
-                >
-                  <Mic className="h-4 w-4" /> Continue to Voice Interview
-                </button>
-                <button
-                  onClick={launchTechnical}
-                  disabled={!pipeline.cvUploaded || !pipeline.technicalRequired}
-                  className={cn(
-                    "flex w-full items-center justify-center gap-2 rounded-xl border px-5 py-3 text-sm font-medium transition-all hover:bg-secondary",
-                    "disabled:cursor-not-allowed disabled:opacity-40"
-                  )}
-                >
-                  <Code2 className="h-4 w-4" /> Skip ahead to Technical Interview
-                </button>
-              </div>
-            </div>
-
             <div className="surface-glass rounded-[2rem] border border-luxe p-6">
               <p className="text-[11px] uppercase tracking-[0.26em] text-muted-foreground">Flow status</p>
               <div className="mt-4 space-y-4">
@@ -460,13 +504,13 @@ export default function InterviewPipeline() {
                 <div className="flex items-center justify-between rounded-2xl bg-card px-4 py-3">
                   <span className="text-sm font-medium">Voice round</span>
                   <span className="text-sm text-muted-foreground">
-                    {!pipeline.voiceRequired ? "Skipped" : voiceAttempt ? "Completed" : "Optional next"}
+                    {!pipeline.cvUploaded ? "Locked until CV is done" : voiceAttempt ? "Completed" : "Ready to start"}
                   </span>
                 </div>
                 <div className="flex items-center justify-between rounded-2xl bg-card px-4 py-3">
                   <span className="text-sm font-medium">Technical round</span>
                   <span className="text-sm text-muted-foreground">
-                    {!pipeline.technicalRequired ? "Skipped" : technicalAttempt ? "Completed" : "Pending"}
+                    {!pipeline.cvUploaded ? "Locked until CV is done" : technicalAttempt ? "Completed" : "Ready to start"}
                   </span>
                 </div>
               </div>
@@ -484,11 +528,11 @@ export default function InterviewPipeline() {
                 <p className="text-sm font-semibold text-primary">Recommended next move</p>
                 <p className="mt-2 text-sm leading-6 text-muted-foreground">
                   {pipeline.cvUploaded
-                    ? pipeline.voiceRequired && !voiceAttempt
+                    ? !voiceAttempt
                       ? "Run the voice round first so the candidate’s behavior and communication can inform how you interpret the technical stage."
-                      : pipeline.technicalRequired && !technicalAttempt
+                      : !technicalAttempt
                         ? "Move into the technical round now. It already has enough context from the CV and JD to stay role-calibrated."
-                        : "This pipeline already has the core inputs it needs. You can review results or rerun stages as needed."
+                        : "All 3 pipeline stages are complete. You can review results or rerun any stage as needed."
                     : "Start the flow, upload the CV, and paste the job description to unlock tailored interviews."}
                 </p>
               </div>
@@ -500,8 +544,332 @@ export default function InterviewPipeline() {
                 Review full results <ArrowRight className="h-4 w-4" />
               </Link>
             </div>
+
+            <div className="surface-glass rounded-[2rem] border border-luxe p-6">
+              <p className="text-[11px] uppercase tracking-[0.26em] text-muted-foreground">Step 2</p>
+              <h2 className="mt-2 text-xl font-semibold">Continue with the full interview pipeline</h2>
+              <p className="mt-2 text-sm leading-7 text-muted-foreground">
+                This pipeline always runs in 3 parts: CV screening, voice interview, and technical interview. Voice and
+                technical open only after the CV screening is completed.
+              </p>
+
+              <div className="mt-5 grid gap-4 md:grid-cols-2 md:items-stretch">
+                <div className="flex h-full flex-col rounded-[1.75rem] border bg-card px-4 py-4">
+                  <div className="flex flex-1 items-start justify-between gap-3">
+                    <div>
+                      <div className="flex items-center gap-2 text-sm font-medium">
+                        <Mic className="h-4 w-4 text-primary" /> Voice interview
+                      </div>
+                      <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                        Assess communication, behavioral depth, and live interview presence after the CV baseline is set.
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-secondary px-3 py-1 text-xs font-medium text-muted-foreground">
+                      {!pipeline.cvUploaded ? "Locked" : voiceAttempt ? "Completed" : "Ready"}
+                    </span>
+                  </div>
+                  <button
+                    onClick={launchVoice}
+                    disabled={!pipeline.cvUploaded}
+                    className={cn(
+                      "mt-4 flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-medium transition-all",
+                      "bg-primary text-primary-foreground hover:bg-primary/90",
+                      "disabled:cursor-not-allowed disabled:opacity-40"
+                    )}
+                  >
+                    <Mic className="h-4 w-4" /> {voiceAttempt ? "Redo Voice Interview" : "Start Voice Interview"}
+                  </button>
+                </div>
+
+                <div className="flex h-full flex-col rounded-[1.75rem] border bg-card px-4 py-4">
+                  <div className="flex flex-1 items-start justify-between gap-3">
+                    <div>
+                      <div className="flex items-center gap-2 text-sm font-medium">
+                        <Code2 className="h-4 w-4 text-primary" /> Technical interview
+                      </div>
+                      <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                        Test role-matched technical fundamentals and problem solving with questions calibrated from the CV and JD.
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-secondary px-3 py-1 text-xs font-medium text-muted-foreground">
+                      {!pipeline.cvUploaded ? "Locked" : technicalAttempt ? "Completed" : "Ready"}
+                    </span>
+                  </div>
+                  <button
+                    onClick={launchTechnical}
+                    disabled={!pipeline.cvUploaded}
+                    className={cn(
+                      "mt-4 flex w-full items-center justify-center gap-2 rounded-xl border px-5 py-3 text-sm font-medium transition-all hover:bg-secondary",
+                      "disabled:cursor-not-allowed disabled:opacity-40"
+                    )}
+                  >
+                    <Code2 className="h-4 w-4" /> {technicalAttempt ? "Redo Technical Interview" : "Start Technical Interview"}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {false && pipelineComplete && (
+              <div className="surface-glass rounded-[2rem] border border-luxe p-6">
+                <p className="text-[11px] uppercase tracking-[0.26em] text-muted-foreground">
+                  Final Summary
+                </p>
+                <div className="mt-4 flex flex-col gap-5 sm:flex-row sm:items-center">
+                  <ScoreRing
+                    score={totalPoints.score}
+                    maxScore={Math.max(totalPoints.max, 1)}
+                    size={96}
+                    strokeWidth={7}
+                    label="Total"
+                  />
+                  <div>
+                    <h2 className="text-xl font-semibold">Completed pipeline score</h2>
+                    <p className="mt-2 text-sm leading-7 text-muted-foreground">
+                      {totalPoints.score}/{totalPoints.max} across the completed stages in this pipeline.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-6 grid gap-4 md:grid-cols-3">
+                  {pipelineAttempts.map((attempt) => (
+                    <div key={attempt!.id} className="rounded-2xl bg-card px-4 py-4">
+                      <p className="text-sm font-semibold">
+                        {attempt!.module === "cv-screening"
+                          ? "CV"
+                          : attempt!.module === "voice-interview"
+                            ? "Voice"
+                            : "Technical"}
+                      </p>
+                      <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                        {attempt!.overallScore}/{attempt!.maxScore}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-6 space-y-4">
+                  <div className="rounded-2xl bg-score-high/10 px-4 py-4">
+                    <p className="text-sm font-semibold text-score-high">What you were good at</p>
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                      {strongestSignals.length
+                        ? strongestSignals
+                            .map((item) => `${item.category} (${item.score}/${item.maxScore})`)
+                            .join(", ")
+                        : "No strong signals available yet."}
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl bg-score-low/10 px-4 py-4">
+                    <p className="text-sm font-semibold text-score-low">Where you lost points</p>
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                      {weakestSignals.length
+                        ? weakestSignals
+                            .map((item) => `${item.category} (${item.score}/${item.maxScore})`)
+                            .join(", ")
+                        : "No weak signals available yet."}
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl bg-card px-4 py-4">
+                    <p className="text-sm font-semibold">What to improve next</p>
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                      {improvementActions.length
+                        ? improvementActions.join(" • ")
+                        : "Complete more stages to unlock specific next actions."}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
+
+        {false && pipelineComplete && (
+          <div className="surface-glass mt-6 rounded-[2rem] border border-luxe p-6">
+            <p className="text-[11px] uppercase tracking-[0.26em] text-muted-foreground">Final Summary</p>
+
+            <div className="mt-4 flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
+              <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+                <ScoreRing
+                  score={totalPoints.score}
+                  maxScore={Math.max(totalPoints.max, 1)}
+                  size={102}
+                  strokeWidth={7}
+                  label="Total"
+                />
+                <div className="max-w-2xl">
+                  <h2 className="text-xl font-semibold">Completed pipeline score</h2>
+                  <p className="mt-2 text-sm leading-7 text-muted-foreground">
+                    {totalPoints.score}/{totalPoints.max} across the completed stages in this pipeline. This report shows
+                    where points were lost, which categories were weakest, and the expected answer points when they were
+                    captured by the evaluator.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-3 xl:min-w-[460px]">
+                <div className="rounded-2xl bg-card px-4 py-4">
+                  <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">Coverage</p>
+                  <p className="mt-2 text-2xl font-semibold">{totalCoverage}%</p>
+                  <p className="mt-1 text-sm text-muted-foreground">Overall points captured</p>
+                </div>
+                <div className="rounded-2xl bg-card px-4 py-4">
+                  <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">Points Lost</p>
+                  <p className="mt-2 text-2xl font-semibold">{totalLostPoints}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">Across all completed stages</p>
+                </div>
+                <div className="rounded-2xl bg-card px-4 py-4">
+                  <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">Answer Gaps</p>
+                  <p className="mt-2 text-2xl font-semibold">{expectedAnswerGaps}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">Expected answer points still missing</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 grid gap-4 lg:grid-cols-3">
+              {stageBreakdowns.map(({ attempt, coverage, lostPoints, weakestCategory, strongestCategory }) => (
+                <div key={attempt.id} className={cn("rounded-[1.75rem] border px-4 py-4", getModuleSurface(attempt.module))}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold">{getModuleLabel(attempt.module)}</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {attempt.overallScore}/{attempt.maxScore} scored
+                      </p>
+                    </div>
+                    <div className="rounded-full bg-white/70 px-3 py-1 text-xs font-medium text-foreground">
+                      {coverage}% coverage
+                    </div>
+                  </div>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+                    <div className="rounded-2xl bg-white/65 px-3 py-3">
+                      <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">Lost</p>
+                      <p className="mt-2 text-lg font-semibold">{lostPoints} pts</p>
+                    </div>
+                    <div className="rounded-2xl bg-white/65 px-3 py-3">
+                      <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">Weakest</p>
+                      <p className="mt-2 text-sm font-medium">{weakestCategory?.category || "Not enough data"}</p>
+                    </div>
+                    <div className="rounded-2xl bg-white/65 px-3 py-3">
+                      <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">Strongest</p>
+                      <p className="mt-2 text-sm font-medium">{strongestCategory?.category || "Not enough data"}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-6 grid gap-5 xl:grid-cols-3">
+              {stageBreakdowns.map(({ attempt }) => (
+                <div key={`${attempt.id}-details`} className="rounded-[1.75rem] border border-luxe bg-card/60 p-5">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">Detailed Breakdown</p>
+                      <h3 className="mt-2 text-lg font-semibold">{getModuleLabel(attempt.module)} stage</h3>
+                    </div>
+                    <div className="rounded-full border border-border/70 px-3 py-1 text-xs font-medium text-muted-foreground">
+                      {attempt.feedback.length} scored categories
+                    </div>
+                  </div>
+
+                  <div className="mt-4 space-y-4">
+                    {attempt.feedback.map((item: FeedbackItem) => {
+                      const detail = splitSuggestionDetails(item.suggestions);
+                      const pointsMissed = Math.max(item.maxScore - item.score, 0);
+
+                      return (
+                        <div key={`${attempt.id}-${item.category}`} className="rounded-2xl border bg-background/80 px-4 py-4">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="text-sm font-semibold">{item.category}</p>
+                            <div className="flex items-center gap-2">
+                              <span className="rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                                {item.score}/{item.maxScore}
+                              </span>
+                              <span
+                                className={cn(
+                                  "rounded-full px-2.5 py-1 text-xs font-medium",
+                                  pointsMissed > 0 ? "bg-score-low/10 text-score-low" : "bg-score-high/10 text-score-high"
+                                )}
+                              >
+                                {pointsMissed > 0 ? `${pointsMissed} pts missed` : "No points missed"}
+                              </span>
+                            </div>
+                          </div>
+
+                          <p className="mt-3 text-sm leading-7 text-muted-foreground">{item.comment}</p>
+
+                          {detail.expectedAnswerPoints.length > 0 && (
+                            <div className="mt-4 rounded-2xl bg-score-low/10 px-3 py-3">
+                              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-score-low">
+                                Expected Answer Points
+                              </p>
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                {detail.expectedAnswerPoints.map((point) => (
+                                  <span
+                                    key={`${attempt.id}-${item.category}-${point}`}
+                                    className="rounded-full border border-score-low/20 bg-white/80 px-3 py-1.5 text-xs leading-5 text-foreground"
+                                  >
+                                    {point}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {detail.coachingTips.length > 0 && (
+                            <div className="mt-4">
+                              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                                How To Recover Points
+                              </p>
+                              <div className="mt-3 space-y-2">
+                                {detail.coachingTips.map((tip) => (
+                                  <div
+                                    key={`${attempt.id}-${item.category}-${tip}`}
+                                    className="rounded-2xl bg-secondary/80 px-3 py-2 text-sm leading-6 text-muted-foreground"
+                                  >
+                                    {tip}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-6 grid gap-4 lg:grid-cols-3">
+              <div className="rounded-2xl bg-score-high/10 px-4 py-4">
+                <p className="text-sm font-semibold text-score-high">What you were good at</p>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                  {strongestSignals.length
+                    ? strongestSignals.map((item) => `${item.category} (${item.score}/${item.maxScore})`).join(", ")
+                    : "No strong signals available yet."}
+                </p>
+              </div>
+
+              <div className="rounded-2xl bg-score-low/10 px-4 py-4">
+                <p className="text-sm font-semibold text-score-low">Where you lost points</p>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                  {weakestSignals.length
+                    ? weakestSignals.map((item) => `${item.category} (${item.score}/${item.maxScore})`).join(", ")
+                    : "No weak signals available yet."}
+                </p>
+              </div>
+
+              <div className="rounded-2xl bg-card px-4 py-4">
+                <p className="text-sm font-semibold">What to improve next</p>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                  {improvementActions.length
+                    ? improvementActions.join(" • ")
+                    : "Complete more stages to unlock specific next actions."}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </AppLayout>
   );

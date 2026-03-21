@@ -32,12 +32,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   const handleLogout = async () => {
     if (!user) {
-      navigate("/login");
+      navigate("/");
       return;
     }
 
     await logout();
-    navigate("/login");
+    navigate("/");
   };
 
   return (
