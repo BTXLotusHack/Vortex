@@ -30,7 +30,7 @@ export default function VoiceInterview() {
   const [searchParams] = useSearchParams();
   const fromPipeline = searchParams.get("from") === "pipeline";
 
-  const [status, setStatus] = useState<Status>("disconnected");
+  const [status, setStatus] = useState<Status>("Disconnected");
   const [mode, setMode] = useState<Mode>("listening");
   const [messages, setMessages] = useState<TranscriptMessage[]>([]);
   const [conversationId, setConversationId] = useState("");
@@ -378,7 +378,7 @@ export default function VoiceInterview() {
                     <p className="text-[11px] uppercase tracking-[0.26em] text-muted-foreground">
                       Live Interview
                     </p>
-                    <h2 className="mt-1 text-xl font-semibold">Talking orb</h2>
+                    <h2 className="mt-1 text-xl font-semibold">Meet Alex!</h2>
                   </div>
                   <div className="rounded-full border border-primary/10 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
                     {status}

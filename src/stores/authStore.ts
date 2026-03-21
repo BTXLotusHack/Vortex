@@ -9,6 +9,7 @@ import {
   verifySignupOtp as verifySignupOtpRequest,
   type AuthUser as User,
 } from "@/lib/api";
+import { useInterviewStore } from "@/stores/interviewStore";
 
 interface Credentials {
   email: string;
@@ -61,10 +62,12 @@ export const useAuthStore = create<AuthState>()((set) => ({
     void getCurrentUser()
       .then(({ user }) => {
         if (!active) return;
+        useInterviewStore.getState().syncToUser(user?.id ?? null);
         set({ user, isLoading: false });
       })
       .catch(() => {
         if (!active) return;
+        useInterviewStore.getState().syncToUser(null);
         set({ user: null, isLoading: false });
       });
 
@@ -75,6 +78,7 @@ export const useAuthStore = create<AuthState>()((set) => ({
 
   refreshUser: async () => {
     const { user } = await getCurrentUser();
+    useInterviewStore.getState().syncToUser(user?.id ?? null);
     set({ user });
     return user;
   },
@@ -86,6 +90,7 @@ export const useAuthStore = create<AuthState>()((set) => ({
         throw new Error("Invalid email or password.");
       }
 
+      useInterviewStore.getState().syncToUser(user.id);
       set({ user });
       return user;
     } catch (error) {
@@ -110,6 +115,7 @@ export const useAuthStore = create<AuthState>()((set) => ({
         throw new Error("Invalid or expired OTP.");
       }
 
+      useInterviewStore.getState().syncToUser(user.id);
       set({ user, pendingSignup: null });
       return user;
     } catch (error) {
@@ -135,6 +141,7 @@ export const useAuthStore = create<AuthState>()((set) => ({
     try {
       await logoutRequest();
     } finally {
+      useInterviewStore.getState().syncToUser(null);
       set({ user: null });
     }
   },

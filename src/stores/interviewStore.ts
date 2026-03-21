@@ -68,6 +68,8 @@ export interface PipelineRun {
 }
 
 export interface InterviewState {
+  activeUserId: string | null;
+  scopedDataByUser: Record<string, InterviewStoreData>;
   attempts: AttemptResult[];
   pipelineRuns: PipelineRun[];
   currentJobRole: string;
@@ -84,6 +86,7 @@ export interface InterviewState {
   setLatestCVAnalysis: (analysis: SavedCVAnalysis | null) => void;
   updatePipeline: (updates: Partial<InterviewPipelineState>) => void;
   resetPipeline: () => void;
+  syncToUser: (userId: string | null) => void;
   upsertPipelineRun: (sessionId: string) => PipelineRun | null;
   setLatestCVContext: (payload: { fileName: string; score: number }) => void;
   getModuleAttempts: (module: ModuleType) => AttemptResult[];
@@ -94,24 +97,44 @@ export interface InterviewState {
   getImprovement: (module: ModuleType) => { improved: string[]; needsWork: string[] } | null;
 }
 
+export interface InterviewStoreData {
+  attempts: AttemptResult[];
+  pipelineRuns: PipelineRun[];
+  currentJobRole: string;
+  currentJobDescription: string;
+  latestCVFileName: string;
+  latestCVScore: number | null;
+  latestCVAnalysis: SavedCVAnalysis | null;
+  candidateProfile: CandidateProfile | null;
+  pipeline: InterviewPipelineState;
+}
+
+function createInitialInterviewData(): InterviewStoreData {
+  return {
+    attempts: [],
+    pipelineRuns: [],
+    currentJobRole: "Frontend Developer",
+    currentJobDescription: "",
+    latestCVFileName: "",
+    latestCVScore: null,
+    latestCVAnalysis: null,
+    candidateProfile: null,
+    pipeline: {
+      active: false,
+      cvUploaded: false,
+      voiceRequired: true,
+      technicalRequired: true,
+      recommendedNextStep: "cv",
+    },
+  };
+}
+
 export const useInterviewStore = create<InterviewState>()(
   persist(
     (set, get) => ({
-      attempts: [],
-      pipelineRuns: [],
-      currentJobRole: "Frontend Developer",
-      currentJobDescription: "",
-      latestCVFileName: "",
-      latestCVScore: null,
-      latestCVAnalysis: null,
-      candidateProfile: null,
-      pipeline: {
-        active: false,
-        cvUploaded: false,
-        voiceRequired: true,
-        technicalRequired: true,
-        recommendedNextStep: "cv",
-      },
+      activeUserId: null,
+      scopedDataByUser: {},
+      ...createInitialInterviewData(),
 
       addAttempt: (attempt) =>
         set((state) => ({ attempts: [attempt, ...state.attempts] })),
@@ -136,6 +159,39 @@ export const useInterviewStore = create<InterviewState>()(
             recommendedNextStep: "cv",
             currentSessionId: undefined,
           },
+        }),
+      syncToUser: (userId) =>
+        set((state) => {
+          const currentData: InterviewStoreData = {
+            attempts: state.attempts,
+            pipelineRuns: state.pipelineRuns,
+            currentJobRole: state.currentJobRole,
+            currentJobDescription: state.currentJobDescription,
+            latestCVFileName: state.latestCVFileName,
+            latestCVScore: state.latestCVScore,
+            latestCVAnalysis: state.latestCVAnalysis,
+            candidateProfile: state.candidateProfile,
+            pipeline: state.pipeline,
+          };
+
+          const nextScopedDataByUser = { ...state.scopedDataByUser };
+          if (state.activeUserId) {
+            nextScopedDataByUser[state.activeUserId] = currentData;
+          }
+
+          if (!userId) {
+            return {
+              activeUserId: null,
+              scopedDataByUser: nextScopedDataByUser,
+              ...createInitialInterviewData(),
+            };
+          }
+
+          return {
+            activeUserId: userId,
+            scopedDataByUser: nextScopedDataByUser,
+            ...(nextScopedDataByUser[userId] || createInitialInterviewData()),
+          };
         }),
       upsertPipelineRun: (sessionId) => {
         const attempts = get().attempts.filter((attempt) => attempt.pipelineSessionId === sessionId);
