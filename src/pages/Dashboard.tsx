@@ -112,15 +112,18 @@ export default function Dashboard() {
     <AppLayout>
       <div className="max-w-6xl pb-5 pt-0 md:pb-5 md:pt-0">
         <div
-          className="surface-hero noise-overlay relative mb-8 overflow-hidden rounded-[2.5rem] border border-luxe px-6 py-8 opacity-0 animate-fade-up md:px-10 md:py-10"
+          className="surface-hero noise-overlay relative isolate mb-8 overflow-hidden rounded-[2.5rem] border border-luxe px-6 py-8 opacity-0 animate-fade-up md:px-10 md:py-10"
           style={{ animationFillMode: "forwards" }}
         >
-          <div className="absolute inset-y-0 right-0 w-1/2 bg-[radial-gradient(circle_at_center,hsl(164_45%_78%/0.18),transparent_48%)]" />
-          <div className="relative max-w-3xl">
+          <div
+            aria-hidden="true"
+            className="absolute inset-y-0 right-0 z-0 w-1/2 bg-[radial-gradient(circle_at_center,hsl(164_45%_78%/0.18),transparent_48%)]"
+          />
+          <div className="relative z-10 max-w-3xl">
             <div className="mb-4 inline-flex items-center rounded-full border border-primary/10 bg-white/60 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.26em] text-primary">
               Smooth practice experience
             </div>
-            <h1 className="max-w-2xl font-display text-4xl leading-[0.98] text-gradient md:text-6xl">
+            <h1 className="max-w-2xl py-1 font-display text-4xl leading-[1.1] text-gradient md:text-6xl md:leading-[1.08]">
               Interview prep with a calmer, sharper rhythm.
             </h1>
             <p className="mt-5 max-w-2xl text-base leading-8 text-muted-foreground md:text-lg">
