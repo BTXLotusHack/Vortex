@@ -7,6 +7,7 @@ import {
   Code2,
   BarChart3,
   LayoutDashboard,
+  Settings2,
   Menu,
   X,
   LogOut,
@@ -20,6 +21,7 @@ const navItems = [
   { label: "Voice Interview", href: "/voice-interview", icon: Mic, meta: "Practice module" },
   { label: "Technical", href: "/technical-interview", icon: Code2, meta: "Practice module" },
   { label: "Results", href: "/results", icon: BarChart3, meta: "Progress history" },
+  { label: "Account", href: "/account", icon: Settings2, meta: "Profile & security" },
 ];
 
 export function AppLayout({ children }: { children: React.ReactNode }) {

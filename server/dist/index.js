@@ -2,6 +2,7 @@ import "./env.js";
 import express from "express";
 import cors from "cors";
 import { authRouter, configurePassport } from "./routes/auth.js";
+import { accountRouter } from "./routes/account.js";
 import { cvRouter } from "./routes/cv.js";
 import { interviewRouter } from "./routes/interview.js";
 import { voiceRouter } from "./routes/voice.js";
@@ -19,6 +20,7 @@ app.use(express.json());
 configurePassport();
 // Routes
 app.use("/api/auth", authRouter);
+app.use("/api/auth", accountRouter);
 app.use("/api/cv", cvRouter);
 app.use("/api/interview", interviewRouter);
 app.use("/api/voice", voiceRouter);

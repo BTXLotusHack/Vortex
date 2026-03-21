@@ -102,6 +102,14 @@ export default function Login() {
                 required
                 autoComplete="current-password"
               />
+              <div className="flex justify-end">
+                <Link
+                  to="/forgot-password"
+                  className="text-xs font-medium text-primary transition-colors hover:text-primary/80 hover:underline"
+                >
+                  Forgot password?
+                </Link>
+              </div>
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? (

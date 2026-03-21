@@ -14,6 +14,9 @@ import TechnicalInterview from "./pages/TechnicalInterview";
 import Results from "./pages/Results";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
+import Account from "./pages/Account";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -38,6 +41,8 @@ const App = () => (
             <Route element={<PublicOnlyRoute />}>
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
             </Route>
             <Route element={<ProtectedRoute />}>
               <Route
@@ -45,6 +50,7 @@ const App = () => (
                 element={<InterviewPipeline />}
               />
               <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/account" element={<Account />} />
               <Route path="/cv-screening" element={<CVScreening />} />
               <Route path="/voice-interview" element={<VoiceInterview />} />
               <Route

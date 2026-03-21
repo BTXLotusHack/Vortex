@@ -28,6 +28,15 @@ function isUniqueViolation(error: unknown) {
   );
 }
 
+export function toPublicUser(user: DbUserRow | AuthUser) {
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    avatar: user.avatar,
+  } satisfies AuthUser;
+}
+
 export function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
 }
@@ -92,7 +101,7 @@ export function validateLoginInput(input: { email?: unknown; password?: unknown 
   return { email, password };
 }
 
-async function findUserByEmail(email: string) {
+export async function findUserByEmail(email: string) {
   const existing = await query<DbUserRow>(
     `
       SELECT id, email, name, avatar, password_hash
@@ -104,6 +113,110 @@ async function findUserByEmail(email: string) {
   );
 
   return existing.rows[0] || null;
+}
+
+export function validateProfileUpdateInput(input: { name?: unknown; email?: unknown }) {
+  const name = typeof input.name === "string" ? normalizeName(input.name) : "";
+  const email = typeof input.email === "string" ? normalizeEmail(input.email) : "";
+
+  if (name.length < 2 || name.length > 80) {
+    throw new AuthValidationError("Please provide a valid name.");
+  }
+
+  if (!EMAIL_REGEX.test(email) || email.length > 320) {
+    throw new AuthValidationError("Please provide a valid email address.");
+  }
+
+  return { name, email };
+}
+
+export function validateChangePasswordInput(input: {
+  currentPassword?: unknown;
+  newPassword?: unknown;
+}) {
+  const currentPassword = typeof input.currentPassword === "string" ? input.currentPassword : "";
+  const newPassword = typeof input.newPassword === "string" ? input.newPassword : "";
+
+  if (!currentPassword) {
+    throw new AuthValidationError("Please provide your current password.");
+  }
+
+  if (newPassword.length < MIN_PASSWORD_LENGTH || newPassword.length > MAX_PASSWORD_LENGTH) {
+    throw new AuthValidationError("Password must be between 8 and 72 characters.");
+  }
+
+  return { currentPassword, newPassword };
+}
+
+export function validateDeleteAccountInput(input: { password?: unknown }) {
+  const password = typeof input.password === "string" ? input.password : "";
+
+  if (!password) {
+    throw new AuthValidationError("Please provide your password to delete the account.");
+  }
+
+  return { password };
+}
+
+export async function updateCurrentUserProfile(input: {
+  userId: string;
+  name: string;
+  email: string;
+}) {
+  try {
+    const result = await query<AuthUser>(
+      `
+        UPDATE users
+        SET name = $1, email = $2
+        WHERE id = $3
+        RETURNING id, email, name, avatar;
+      `,
+      [input.name, input.email, input.userId],
+    );
+
+    const user = result.rows[0];
+    if (!user) {
+      throw new AuthUnauthorizedError("Authentication required.");
+    }
+
+    return user;
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      throw new AuthConflictError("That email address is already in use.");
+    }
+
+    throw error;
+  }
+}
+
+export async function deleteCurrentUserAccount(input: {
+  userId: string;
+  password: string;
+}) {
+  const result = await query<DbUserRow>(
+    `
+      SELECT id, email, name, avatar, password_hash
+      FROM users
+      WHERE id = $1
+      LIMIT 1;
+    `,
+    [input.userId],
+  );
+
+  const user = result.rows[0];
+  if (!user?.password_hash) {
+    throw new AuthUnauthorizedError("Password is incorrect.");
+  }
+
+  const matches = await bcrypt.compare(input.password, user.password_hash);
+  if (!matches) {
+    throw new AuthUnauthorizedError("Password is incorrect.");
+  }
+
+  await query("DELETE FROM password_reset_verifications WHERE LOWER(email) = LOWER($1);", [user.email]);
+  await query("DELETE FROM signup_verifications WHERE LOWER(email) = LOWER($1);", [user.email]);
+  await query("DELETE FROM profiles WHERE user_id = $1::uuid;", [user.id]);
+  await query("DELETE FROM users WHERE id = $1;", [user.id]);
 }
 
 export async function createOrActivateUserAccount(input: {

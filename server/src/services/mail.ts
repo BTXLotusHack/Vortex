@@ -97,3 +97,52 @@ export async function sendSignupSuccessEmail(input: {
     `,
   });
 }
+
+export async function sendPasswordResetOtpEmail(input: {
+  to: string;
+  name: string;
+  otp: string;
+}) {
+  const { transporter, from } = createTransport();
+
+  await transporter.sendMail({
+    from,
+    to: input.to,
+    subject: `${APP_NAME} password reset code`,
+    text: `Hello ${input.name}, your password reset code is ${input.otp}. It expires in ${OTP_TTL_MINUTES} minutes.`,
+    html: `
+      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #16332e;">
+        <h2 style="margin-bottom: 8px;">Reset your ${APP_NAME} password</h2>
+        <p>Hello ${input.name},</p>
+        <p>Use the OTP below to reset your password:</p>
+        <div style="display: inline-block; padding: 12px 18px; border-radius: 12px; background: #f4efe5; font-size: 28px; font-weight: 700; letter-spacing: 8px;">
+          ${input.otp}
+        </div>
+        <p style="margin-top: 16px;">This code expires in ${OTP_TTL_MINUTES} minutes.</p>
+        <p>If you did not request this, you can ignore this email.</p>
+      </div>
+    `,
+  });
+}
+
+export async function sendPasswordChangedEmail(input: {
+  to: string;
+  name: string;
+}) {
+  const { transporter, from } = createTransport();
+
+  await transporter.sendMail({
+    from,
+    to: input.to,
+    subject: `${APP_NAME} password updated`,
+    text: `Hello ${input.name}, your ${APP_NAME} password was changed successfully.`,
+    html: `
+      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #16332e;">
+        <h2 style="margin-bottom: 8px;">Password changed successfully</h2>
+        <p>Hello ${input.name},</p>
+        <p>Your ${APP_NAME} password has been updated.</p>
+        <p>If you did not make this change, please contact support immediately.</p>
+      </div>
+    `,
+  });
+}
