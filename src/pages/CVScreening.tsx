@@ -138,7 +138,7 @@ export default function CVScreening() {
     <AppLayout>
       <div className="px-6 py-8 md:px-10 md:py-10 max-w-3xl mx-auto">
         <Link
-          to="/"
+          to="/dashboard"
           className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6"
         >
           <ArrowLeft className="h-4 w-4" /> Back to Dashboard

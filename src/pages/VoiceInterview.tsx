@@ -12,17 +12,17 @@ import {
   Sparkles,
 } from "lucide-react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { apiFetch } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+
+const API_URL = import.meta.env.VITE_API_URL || "";
+const DEFAULT_ELEVENLABS_AGENT_ID = "agent_5601km7vdgwqfkdtxdev14rsyet7";
 
 type TranscriptMessage = {
   id: string;
   role: "user" | "agent";
   message: string;
 };
-
-const AGENT_ID = import.meta.env.VITE_ELEVENLABS_AGENT_ID as string | undefined;
 
 export default function VoiceInterview() {
   const navigate = useNavigate();
@@ -43,26 +43,70 @@ export default function VoiceInterview() {
     currentJobRole,
     currentJobDescription,
     candidateProfile,
+    latestCVFileName,
     pipeline,
     updatePipeline,
   } = useInterviewStore();
 
   const interviewsUnlocked =
     pipeline.cvUploaded && Boolean(candidateProfile?.jobFitSummary);
+  const agentId =
+    import.meta.env.VITE_ELEVENLABS_AGENT_ID ||
+    import.meta.env.VITE_ELEVENLABS_WIDGET_AGENT_ID ||
+    DEFAULT_ELEVENLABS_AGENT_ID;
 
-  const dynamicVariables = useMemo<Record<string, string | number | boolean>>(
+  const dynamicVariables = useMemo(
     () => ({
-      job_role: currentJobRole,
-      job_description: currentJobDescription || "",
-      candidate_summary: candidateProfile?.summary || "",
-      candidate_strengths: candidateProfile?.strengths?.join(", ") || "",
-      candidate_risks: candidateProfile?.risks?.join(", ") || "",
-      candidate_skills: candidateProfile?.likelySkills?.join(", ") || "",
-      job_fit_summary: candidateProfile?.jobFitSummary || "",
-      job_fit_score: candidateProfile?.jobFitScore ?? 0,
+      job_title: currentJobRole,
+      job_description: currentJobDescription,
+      cv_file_name: latestCVFileName || "candidate-cv",
+      cv_summary: candidateProfile?.summary || "",
+      cv_strengths: candidateProfile?.strengths?.join(", ") || "",
+      cv_risks: candidateProfile?.risks?.join(", ") || "",
+      likely_skills: candidateProfile?.likelySkills?.join(", ") || "",
+      likely_seniority: candidateProfile?.seniority || "",
+      jd_fit_score: candidateProfile?.jobFitScore?.toString() || "",
+      jd_fit_verdict: candidateProfile?.jobFitVerdict || "",
+      jd_fit_summary: candidateProfile?.jobFitSummary || "",
     }),
-    [candidateProfile, currentJobDescription, currentJobRole],
+    [candidateProfile, currentJobDescription, currentJobRole, latestCVFileName],
   );
+
+  const fetchConversationToken = async (): Promise<string | null> => {
+    if (!API_URL) return null;
+
+    const candidates = [
+      "/api/voice/conversation-token",
+      "/api/voice/token",
+      "/api/voice/realtime-token",
+    ];
+
+    for (const endpoint of candidates) {
+      try {
+        const response = await fetch(
+          `${API_URL}${endpoint}?agentId=${encodeURIComponent(agentId)}`,
+          {
+            method: "GET",
+          },
+        );
+
+        if (!response.ok) continue;
+
+        const contentType = response.headers.get("content-type") || "";
+        if (contentType.includes("application/json")) {
+          const data = await response.json().catch(() => null);
+          if (typeof data?.token === "string") return data.token;
+        }
+
+        const text = await response.text();
+        if (text) return text;
+      } catch {
+        continue;
+      }
+    }
+
+    return null;
+  };
 
   const stopVolumeLoop = () => {
     if (animationFrameRef.current !== null) {
@@ -74,7 +118,7 @@ export default function VoiceInterview() {
   const startVolumeLoop = () => {
     stopVolumeLoop();
 
-    const tick = () => {
+    const tick = async () => {
       const session = conversationRef.current;
       if (!session || !session.isOpen()) {
         setAudioLevel(0.18);
@@ -95,40 +139,6 @@ export default function VoiceInterview() {
     animationFrameRef.current = requestAnimationFrame(tick);
   };
 
-  const fetchConversationToken = async (): Promise<string | null> => {
-    const candidates = [
-      "/api/voice/conversation-token",
-      "/api/voice/token",
-      "/api/voice/realtime-token",
-    ];
-
-    for (const endpoint of candidates) {
-      try {
-        const suffix = AGENT_ID
-          ? `?agentId=${encodeURIComponent(AGENT_ID)}`
-          : "";
-        const response = await apiFetch(`${endpoint}${suffix}`, {
-          method: "GET",
-        });
-
-        if (!response.ok) continue;
-
-        const contentType = response.headers.get("content-type") || "";
-        if (contentType.includes("application/json")) {
-          const data = await response.json().catch(() => null);
-          if (typeof data?.token === "string") return data.token;
-        }
-
-        const text = await response.text();
-        if (text) return text;
-      } catch {
-        continue;
-      }
-    }
-
-    return null;
-  };
-
   const startConversation = async () => {
     try {
       if (conversationRef.current) return;
@@ -140,12 +150,6 @@ export default function VoiceInterview() {
       await navigator.mediaDevices.getUserMedia({ audio: true });
 
       const conversationToken = await fetchConversationToken();
-      if (!conversationToken && !AGENT_ID) {
-        throw new Error(
-          "Missing realtime token endpoint and VITE_ELEVENLABS_AGENT_ID is not set.",
-        );
-      }
-
       const sharedHandlers = {
         dynamicVariables,
         onConnect: ({ conversationId: id }: { conversationId: string }) => {
@@ -176,16 +180,19 @@ export default function VoiceInterview() {
         onModeChange: ({ mode: nextMode }: { mode: Mode }) => {
           setMode(nextMode);
         },
-        onMessage: ({ role, message }: { role: string; message: string }) => {
+        onMessage: ({
+          role,
+          message,
+        }: {
+          role: "user" | "agent";
+          message: string;
+        }) => {
           if (!message.trim()) return;
-          const normalizedRole = role === "user" ? "user" : "agent";
           setMessages((current) => [
             ...current,
             {
-              id: `${normalizedRole}-${Date.now()}-${Math.random()
-                .toString(36)
-                .slice(2, 8)}`,
-              role: normalizedRole,
+              id: `${role}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              role,
               message,
             },
           ]);
@@ -196,23 +203,17 @@ export default function VoiceInterview() {
       try {
         conversation = await Conversation.startSession({
           connectionType: "webrtc",
-          ...(conversationToken
-            ? { conversationToken }
-            : { agentId: AGENT_ID! }),
+          ...(conversationToken ? { conversationToken } : { agentId }),
           ...sharedHandlers,
         });
       } catch (primaryError) {
-        if (!AGENT_ID) {
-          throw primaryError;
-        }
-
         console.warn(
           "WebRTC conversation start failed, retrying with websocket.",
           primaryError,
         );
         conversation = await Conversation.startSession({
           connectionType: "websocket",
-          agentId: AGENT_ID,
+          agentId,
           ...sharedHandlers,
         });
       }
@@ -231,15 +232,16 @@ export default function VoiceInterview() {
     try {
       await conversationRef.current?.endSession();
     } catch {
-      // Session may already be closed.
+      // session may already be closed
+    } finally {
+      conversationRef.current = null;
+      setStatus("disconnected");
+      setMode("listening");
+      setAudioLevel(0.18);
     }
-    conversationRef.current = null;
-    setStatus("disconnected");
-    setAudioLevel(0.18);
   };
 
   const markInterviewComplete = () => {
-    setMarkedComplete(true);
     updatePipeline({
       active: true,
       lastCompletedStep: "voice",
@@ -247,7 +249,8 @@ export default function VoiceInterview() {
         ? "technical"
         : "complete",
     });
-    toast.success("Voice interview marked complete.");
+    setMarkedComplete(true);
+    toast.success("Voice interview marked as complete.");
   };
 
   useEffect(() => {

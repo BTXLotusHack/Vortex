@@ -381,12 +381,8 @@ export async function getInterviewQuestions(
   },
 ): Promise<InterviewQuestionPayload[]> {
   try {
-    const briefQuery = options?.questionBrief
-      ? `&brief=${encodeURIComponent(options.questionBrief)}`
-      : "";
-    const endpoint = `/api/interview/questions?role=${encodeURIComponent(jobRole)}&type=${type}&count=${count}${briefQuery}`;
-    const res = await apiFetch(endpoint, {
-      method: "GET",
+    const res = await apiFetch("/api/interview/questions", {
+      method: "POST",
       cache: "no-store",
       headers: {
         "Content-Type": "application/json",
@@ -408,10 +404,11 @@ export async function getInterviewQuestions(
       const message = data?.error || "Technical question generation failed.";
       throw new Error(message);
     }
-  } catch {
-    if (type === "technical") {
-      throw new Error(
-        "Technical questions require backend OpenAI generation. Please ensure server is running and OPENAI_API_KEY is set.",
+  } catch (error) {
+    if (type === "technical" && error instanceof Error) {
+      console.warn(
+        "Technical question generation fell back to local questions:",
+        error.message,
       );
     }
     // Fall back to local mock below when backend is unavailable.

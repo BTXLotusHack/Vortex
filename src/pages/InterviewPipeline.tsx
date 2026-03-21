@@ -179,7 +179,7 @@ export default function InterviewPipeline() {
     <AppLayout>
       <div className="max-w-5xl pb-5 pt-0 md:pb-5 md:pt-0">
         <Link
-          to="/"
+          to="/dashboard"
           className="mb-6 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" /> Dashboard

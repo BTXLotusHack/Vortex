@@ -52,7 +52,7 @@ export default function Register() {
         otp,
       });
       toast.success("Account created successfully.");
-      navigate("/", { replace: true });
+      navigate("/dashboard", { replace: true });
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Invalid or expired OTP.";

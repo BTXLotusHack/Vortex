@@ -29,7 +29,7 @@ export default function Results() {
     <AppLayout>
       <div className="max-w-5xl pb-5 pt-0 md:pb-5 md:pt-0">
         <Link
-          to="/"
+          to="/dashboard"
           className="mb-6 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" /> Dashboard
@@ -54,7 +54,7 @@ export default function Results() {
               No attempts yet. Complete a module to see your results here.
             </p>
             <Link
-              to="/"
+              to="/dashboard"
               className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition-all hover:bg-primary/90"
             >
               Go to Dashboard

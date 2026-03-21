@@ -4,7 +4,14 @@ import { ScoreRing } from "@/components/ScoreRing";
 import { FeedbackPanel } from "@/components/FeedbackPanel";
 import { useInterviewStore, type FeedbackItem } from "@/stores/interviewStore";
 import { getInterviewQuestions, evaluateAnswer } from "@/lib/api";
-import { ArrowLeft, Loader2, Play, ChevronRight, Code2, Clock } from "lucide-react";
+import {
+  ArrowLeft,
+  Loader2,
+  Play,
+  ChevronRight,
+  Code2,
+  Clock,
+} from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import Editor from "@monaco-editor/react";
@@ -14,7 +21,9 @@ type Question = Awaited<ReturnType<typeof getInterviewQuestions>>[number];
 
 export default function TechnicalInterview() {
   const [searchParams] = useSearchParams();
-  const [stage, setStage] = useState<"setup" | "interview" | "results">("setup");
+  const [stage, setStage] = useState<"setup" | "interview" | "results">(
+    "setup",
+  );
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentQ, setCurrentQ] = useState(0);
   const [questionCount, setQuestionCount] = useState(5);
@@ -22,13 +31,19 @@ export default function TechnicalInterview() {
   const [loading, setLoading] = useState(false);
   const [userAnswer, setUserAnswer] = useState("");
   const [codeAnswer, setCodeAnswer] = useState(
-    "function solve(input) {\n  // write your solution\n  return input;\n}"
+    "function solve(input) {\n  // write your solution\n  return input;\n}",
   );
-  const [codeLanguage, setCodeLanguage] = useState<"javascript" | "typescript" | "python">("typescript");
-  const [answers, setAnswers] = useState<Array<{ question: Question; answer: string; evaluation: any }>>([]);
+  const [codeLanguage, setCodeLanguage] = useState<
+    "javascript" | "typescript" | "python"
+  >("typescript");
+  const [answers, setAnswers] = useState<
+    Array<{ question: Question; answer: string; evaluation: any }>
+  >([]);
   const [evaluating, setEvaluating] = useState(false);
   const [timer, setTimer] = useState(0);
-  const [timerInterval, setTimerInterval] = useState<ReturnType<typeof setInterval> | null>(null);
+  const [timerInterval, setTimerInterval] = useState<ReturnType<
+    typeof setInterval
+  > | null>(null);
 
   const fromPipeline = searchParams.get("from") === "pipeline";
   const {
@@ -41,15 +56,28 @@ export default function TechnicalInterview() {
     getImprovement,
     updatePipeline,
   } = useInterviewStore();
-  const interviewsUnlocked = pipeline.cvUploaded && Boolean(candidateProfile?.jobFitSummary);
+  const interviewsUnlocked =
+    pipeline.cvUploaded && Boolean(candidateProfile?.jobFitSummary);
 
   const generatedBrief = [
-    currentJobDescription.trim() ? `Job description:\n${currentJobDescription.trim()}` : "",
-    candidateProfile?.summary ? `Candidate summary:\n${candidateProfile.summary}` : "",
-    candidateProfile?.likelySkills?.length ? `Likely skillset: ${candidateProfile.likelySkills.join(", ")}` : "",
-    candidateProfile?.strengths?.length ? `Observed strengths: ${candidateProfile.strengths.join(", ")}` : "",
-    candidateProfile?.risks?.length ? `Skill gaps or risks: ${candidateProfile.risks.join(", ")}` : "",
-    candidateProfile?.jobFitSummary ? `JD fit assessment: ${candidateProfile.jobFitSummary}` : "",
+    currentJobDescription.trim()
+      ? `Job description:\n${currentJobDescription.trim()}`
+      : "",
+    candidateProfile?.summary
+      ? `Candidate summary:\n${candidateProfile.summary}`
+      : "",
+    candidateProfile?.likelySkills?.length
+      ? `Likely skillset: ${candidateProfile.likelySkills.join(", ")}`
+      : "",
+    candidateProfile?.strengths?.length
+      ? `Observed strengths: ${candidateProfile.strengths.join(", ")}`
+      : "",
+    candidateProfile?.risks?.length
+      ? `Skill gaps or risks: ${candidateProfile.risks.join(", ")}`
+      : "",
+    candidateProfile?.jobFitSummary
+      ? `JD fit assessment: ${candidateProfile.jobFitSummary}`
+      : "",
     "Set difficulty to match the role, job requirements, and likely candidate level. Use coding only when it fits the role.",
   ]
     .filter(Boolean)
@@ -58,11 +86,18 @@ export default function TechnicalInterview() {
   const startInterview = async () => {
     setLoading(true);
     try {
-      const qs = await getInterviewQuestions(currentJobRole, "technical", questionCount, {
-        questionBrief: questionBrief.trim() || generatedBrief || undefined,
-      });
+      const qs = await getInterviewQuestions(
+        currentJobRole,
+        "technical",
+        questionCount,
+        {
+          questionBrief: questionBrief.trim() || generatedBrief || undefined,
+        },
+      );
       if (!qs.length) {
-        toast.error("No questions generated. Please refine your brief and try again.");
+        toast.error(
+          "No questions generated. Please refine your brief and try again.",
+        );
         return;
       }
       setQuestions(qs);
@@ -73,7 +108,10 @@ export default function TechnicalInterview() {
       const interval = setInterval(() => setTimer((t) => t + 1), 1000);
       setTimerInterval(interval);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Cannot generate technical questions right now.";
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Cannot generate technical questions right now.";
       toast.error(message);
     } finally {
       setLoading(false);
@@ -87,33 +125,50 @@ export default function TechnicalInterview() {
     const requiresCoding = Boolean(q.requiresCoding);
     const composedAnswer = [
       userAnswer.trim() ? `Approach:\n${userAnswer.trim()}` : "",
-      requiresCoding && codeAnswer.trim() ? `Code (${codeLanguage}):\n${codeAnswer.trim()}` : "",
+      requiresCoding && codeAnswer.trim()
+        ? `Code (${codeLanguage}):\n${codeAnswer.trim()}`
+        : "",
     ]
       .filter(Boolean)
       .join("\n\n");
 
     try {
-      const evaluation = await evaluateAnswer(q.id, composedAnswer, q.expectedPoints, {
-        type: "technical",
-        question: q.question,
-        difficulty: q.difficulty,
-        requiresCoding,
-      });
-      const newAnswers = [...answers, { question: q, answer: composedAnswer, evaluation }];
+      const evaluation = await evaluateAnswer(
+        q.id,
+        composedAnswer,
+        q.expectedPoints,
+        {
+          type: "technical",
+          question: q.question,
+          difficulty: q.difficulty,
+          requiresCoding,
+        },
+      );
+      const newAnswers = [
+        ...answers,
+        { question: q, answer: composedAnswer, evaluation },
+      ];
       setAnswers(newAnswers);
       setUserAnswer("");
       setCodeAnswer(
-        currentQ < questions.length - 1 && questions[currentQ + 1]?.requiresCoding
+        currentQ < questions.length - 1 &&
+          questions[currentQ + 1]?.requiresCoding
           ? "function solve(input) {\n  // write your solution\n  return input;\n}"
-          : ""
+          : "",
       );
 
       if (currentQ < questions.length - 1) {
         setCurrentQ(currentQ + 1);
       } else {
         if (timerInterval) clearInterval(timerInterval);
-        const totalScore = newAnswers.reduce((s, a) => s + a.evaluation.score, 0);
-        const maxScore = newAnswers.reduce((s, a) => s + a.evaluation.maxScore, 0);
+        const totalScore = newAnswers.reduce(
+          (s, a) => s + a.evaluation.score,
+          0,
+        );
+        const maxScore = newAnswers.reduce(
+          (s, a) => s + a.evaluation.maxScore,
+          0,
+        );
         const feedback: FeedbackItem[] = newAnswers.map((a) => ({
           category: `${a.question.category} (${a.question.difficulty})`,
           score: a.evaluation.score,
@@ -170,8 +225,14 @@ export default function TechnicalInterview() {
         }))
       : [];
 
-  const totalScore = answers.reduce((s, a) => s + (a.evaluation?.score || 0), 0);
-  const totalMax = answers.reduce((s, a) => s + (a.evaluation?.maxScore || 0), 0);
+  const totalScore = answers.reduce(
+    (s, a) => s + (a.evaluation?.score || 0),
+    0,
+  );
+  const totalMax = answers.reduce(
+    (s, a) => s + (a.evaluation?.maxScore || 0),
+    0,
+  );
   const improvement = getImprovement("technical-interview");
 
   return (
@@ -188,7 +249,9 @@ export default function TechnicalInterview() {
           <div className="rounded-lg border bg-card p-6">
             <h1 className="text-2xl font-bold">Technical Interview Locked</h1>
             <p className="mt-2 text-sm leading-7 text-muted-foreground">
-              Candidates must complete CV analysis against the job description before technical questions can be generated. The system uses that fit assessment to set the topic coverage and difficulty.
+              Candidates must complete CV analysis against the job description
+              before technical questions can be generated. The system uses that
+              fit assessment to set the topic coverage and difficulty.
             </p>
             <div className="mt-5 flex flex-wrap gap-3">
               <Link
@@ -208,27 +271,39 @@ export default function TechnicalInterview() {
         )}
 
         {interviewsUnlocked && stage === "setup" && (
-          <div className="opacity-0 animate-fade-up" style={{ animationFillMode: "forwards" }}>
+          <div
+            className="opacity-0 animate-fade-up"
+            style={{ animationFillMode: "forwards" }}
+          >
             <h1 className="text-2xl font-bold mb-2">Technical Interview</h1>
             <p className="text-muted-foreground mb-8">
-              Test your technical knowledge with role-specific questions covering fundamentals, frameworks, and system design.
+              Test your technical knowledge with role-specific questions
+              covering fundamentals, frameworks, and system design.
             </p>
 
             {fromPipeline && (
               <div className="mb-6 rounded-lg border bg-card px-4 py-3 text-sm leading-6 text-muted-foreground">
-                This round is being generated from the pipeline context, so the technical depth is calibrated from the CV, the job description, and the inferred skill set.
+                This round is being generated from the pipeline context, so the
+                technical depth is calibrated from the CV, the job description,
+                and the inferred skill set.
               </div>
             )}
 
             {candidateProfile?.jobFitSummary && (
               <div className="mb-6 rounded-lg border bg-card px-4 py-3 text-sm leading-6 text-muted-foreground">
-                JD fit: <span className="font-medium text-foreground">{candidateProfile.jobFitVerdict || "partial-fit"}</span>. {candidateProfile.jobFitSummary}
+                JD fit:{" "}
+                <span className="font-medium text-foreground">
+                  {candidateProfile.jobFitVerdict || "partial-fit"}
+                </span>
+                . {candidateProfile.jobFitSummary}
               </div>
             )}
 
             <div className="space-y-4">
               <div>
-                <label className="text-sm font-medium mb-1.5 block">Target Role</label>
+                <label className="text-sm font-medium mb-1.5 block">
+                  Target Role
+                </label>
                 <input
                   type="text"
                   value={currentJobRole}
@@ -239,13 +314,19 @@ export default function TechnicalInterview() {
               </div>
 
               <div>
-                <label className="text-sm font-medium mb-1.5 block">Number of Questions</label>
+                <label className="text-sm font-medium mb-1.5 block">
+                  Number of Questions
+                </label>
                 <input
                   type="number"
                   min={1}
                   max={10}
                   value={questionCount}
-                  onChange={(e) => setQuestionCount(Math.max(1, Math.min(10, Number(e.target.value) || 5)))}
+                  onChange={(e) =>
+                    setQuestionCount(
+                      Math.max(1, Math.min(10, Number(e.target.value) || 5)),
+                    )
+                  }
                   title="Number of interview questions"
                   placeholder="5"
                   className="w-full rounded-lg border bg-card px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
@@ -253,7 +334,9 @@ export default function TechnicalInterview() {
               </div>
 
               <div>
-                <label className="text-sm font-medium mb-1.5 block">Question Brief (optional)</label>
+                <label className="text-sm font-medium mb-1.5 block">
+                  Question Brief (optional)
+                </label>
                 <textarea
                   value={questionBrief}
                   onChange={(e) => setQuestionBrief(e.target.value)}
@@ -275,13 +358,18 @@ export default function TechnicalInterview() {
                   "w-full flex items-center justify-center gap-2 rounded-lg px-6 py-3",
                   "bg-primary text-primary-foreground font-medium text-sm",
                   "hover:bg-primary/90 active:scale-[0.98] transition-all",
-                  "disabled:opacity-40"
+                  "disabled:opacity-40",
                 )}
               >
                 {loading ? (
-                  <><Loader2 className="h-4 w-4 animate-spin" /> Loading questions…</>
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" /> Loading
+                    questions…
+                  </>
                 ) : (
-                  <><Code2 className="h-4 w-4" /> Start Technical Interview</>
+                  <>
+                    <Code2 className="h-4 w-4" /> Start Technical Interview
+                  </>
                 )}
               </button>
             </div>
@@ -289,7 +377,10 @@ export default function TechnicalInterview() {
         )}
 
         {stage === "interview" && questions[currentQ] && (
-          <div className="opacity-0 animate-fade-up" style={{ animationFillMode: "forwards" }}>
+          <div
+            className="opacity-0 animate-fade-up"
+            style={{ animationFillMode: "forwards" }}
+          >
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 {questions.map((_, i) => (
@@ -297,7 +388,11 @@ export default function TechnicalInterview() {
                     key={i}
                     className={cn(
                       "h-1.5 w-8 rounded-full transition-colors duration-300",
-                      i < currentQ ? "bg-primary" : i === currentQ ? "bg-primary/50" : "bg-muted"
+                      i < currentQ
+                        ? "bg-primary"
+                        : i === currentQ
+                          ? "bg-primary/50"
+                          : "bg-muted",
                     )}
                   />
                 ))}
@@ -319,7 +414,7 @@ export default function TechnicalInterview() {
                     ? "bg-score-high/10 text-score-high"
                     : questions[currentQ].difficulty === "medium"
                       ? "bg-score-medium/10 text-score-medium"
-                      : "bg-score-low/10 text-score-low"
+                      : "bg-score-low/10 text-score-low",
                 )}
               >
                 {questions[currentQ].difficulty}
@@ -346,7 +441,14 @@ export default function TechnicalInterview() {
                   </span>
                   <select
                     value={codeLanguage}
-                    onChange={(e) => setCodeLanguage(e.target.value as "javascript" | "typescript" | "python")}
+                    onChange={(e) =>
+                      setCodeLanguage(
+                        e.target.value as
+                          | "javascript"
+                          | "typescript"
+                          | "python",
+                      )
+                    }
                     aria-label="Select code language"
                     title="Select code language"
                     className="rounded-md border bg-background px-2 py-1 text-xs"
@@ -374,7 +476,8 @@ export default function TechnicalInterview() {
               </div>
             ) : (
               <div className="mt-4 rounded-lg border bg-card px-4 py-3 text-sm text-muted-foreground">
-                This question focuses on reasoning. Monaco editor is hidden because coding is not required.
+                This question focuses on reasoning. Monaco editor is hidden
+                because coding is not required.
               </div>
             )}
 
@@ -383,19 +486,25 @@ export default function TechnicalInterview() {
               disabled={
                 evaluating ||
                 (!questions[currentQ].requiresCoding && !userAnswer.trim()) ||
-                (questions[currentQ].requiresCoding && !userAnswer.trim() && !codeAnswer.trim())
+                (questions[currentQ].requiresCoding &&
+                  !userAnswer.trim() &&
+                  !codeAnswer.trim())
               }
               className={cn(
                 "mt-4 w-full flex items-center justify-center gap-2 rounded-lg px-6 py-3",
                 "bg-primary text-primary-foreground font-medium text-sm",
                 "hover:bg-primary/90 active:scale-[0.98] transition-all",
-                "disabled:opacity-40"
+                "disabled:opacity-40",
               )}
             >
               {evaluating ? (
-                <><Loader2 className="h-4 w-4 animate-spin" /> Evaluating…</>
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" /> Evaluating…
+                </>
               ) : currentQ < questions.length - 1 ? (
-                <><ChevronRight className="h-4 w-4" /> Next Question</>
+                <>
+                  <ChevronRight className="h-4 w-4" /> Next Question
+                </>
               ) : (
                 "Finish Interview"
               )}
@@ -409,7 +518,12 @@ export default function TechnicalInterview() {
               className="flex flex-col sm:flex-row items-center gap-6 rounded-lg border bg-card p-6 mb-6 opacity-0 animate-fade-up"
               style={{ animationFillMode: "forwards" }}
             >
-              <ScoreRing score={totalScore} maxScore={totalMax} size={110} strokeWidth={8} />
+              <ScoreRing
+                score={totalScore}
+                maxScore={totalMax}
+                size={110}
+                strokeWidth={8}
+              />
               <div className="text-center sm:text-left">
                 <h2 className="text-lg font-semibold">Technical Score</h2>
                 <p className="text-sm text-muted-foreground mt-1">
@@ -423,10 +537,14 @@ export default function TechnicalInterview() {
                 {improvement && (
                   <div className="mt-2 text-xs space-y-0.5">
                     {improvement.improved.length > 0 && (
-                      <p className="text-score-high">↑ Improved: {improvement.improved.join(", ")}</p>
+                      <p className="text-score-high">
+                        ↑ Improved: {improvement.improved.join(", ")}
+                      </p>
                     )}
                     {improvement.needsWork.length > 0 && (
-                      <p className="text-score-low">↓ Needs work: {improvement.needsWork.join(", ")}</p>
+                      <p className="text-score-low">
+                        ↓ Needs work: {improvement.needsWork.join(", ")}
+                      </p>
                     )}
                   </div>
                 )}
@@ -436,7 +554,10 @@ export default function TechnicalInterview() {
             <FeedbackPanel feedback={latestFeedback} />
 
             <button
-              onClick={() => { setStage("setup"); setTimer(0); }}
+              onClick={() => {
+                setStage("setup");
+                setTimer(0);
+              }}
               className="mt-6 w-full rounded-lg border px-6 py-3 text-sm font-medium hover:bg-secondary transition-colors active:scale-[0.98]"
             >
               Try Again

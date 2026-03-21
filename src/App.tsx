@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ProtectedRoute, PublicOnlyRoute } from "@/components/auth/RouteGuards";
 import { useAuthStore } from "@/stores/authStore";
+import Index from "./pages/Index";
 import Dashboard from "./pages/Dashboard";
 import CVScreening from "./pages/CVScreening";
 import InterviewPipeline from "./pages/InterviewPipeline";
@@ -33,6 +34,7 @@ const App = () => (
       <BrowserRouter>
         <AuthInitializer>
           <Routes>
+            <Route path="/" element={<Index />} />
             <Route element={<PublicOnlyRoute />}>
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
@@ -42,7 +44,7 @@ const App = () => (
                 path="/interview-pipeline"
                 element={<InterviewPipeline />}
               />
-              <Route path="/" element={<Dashboard />} />
+              <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/cv-screening" element={<CVScreening />} />
               <Route path="/voice-interview" element={<VoiceInterview />} />
               <Route
