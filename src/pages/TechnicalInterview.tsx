@@ -18,6 +18,7 @@ import Editor from "@monaco-editor/react";
 import { toast } from "sonner";
 
 type Question = Awaited<ReturnType<typeof getInterviewQuestions>>[number];
+type AnswerEvaluation = Awaited<ReturnType<typeof evaluateAnswer>>;
 
 export default function TechnicalInterview() {
   const navigate = useNavigate();
@@ -38,7 +39,7 @@ export default function TechnicalInterview() {
     "javascript" | "typescript" | "python"
   >("typescript");
   const [answers, setAnswers] = useState<
-    Array<{ question: Question; answer: string; evaluation: any }>
+    Array<{ question: Question; answer: string; evaluation: AnswerEvaluation }>
   >([]);
   const [evaluating, setEvaluating] = useState(false);
   const [timer, setTimer] = useState(0);

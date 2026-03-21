@@ -63,6 +63,7 @@ function splitSuggestionDetails(suggestions: string[]) {
 
 export default function InterviewPipeline() {
   const navigate = useNavigate();
+  const showFinalSummary = false;
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [result, setResult] = useState<CVAnalysisResult | null>(null);
@@ -609,7 +610,7 @@ export default function InterviewPipeline() {
               </div>
             </div>
 
-            {false && pipelineComplete && (
+            {showFinalSummary && pipelineComplete && (
               <div className="surface-glass rounded-[2rem] border border-luxe p-6">
                 <p className="text-[11px] uppercase tracking-[0.26em] text-muted-foreground">
                   Final Summary
@@ -684,7 +685,7 @@ export default function InterviewPipeline() {
           </div>
         </div>
 
-        {false && pipelineComplete && (
+        {showFinalSummary && pipelineComplete && (
           <div className="surface-glass mt-6 rounded-[2rem] border border-luxe p-6">
             <p className="text-[11px] uppercase tracking-[0.26em] text-muted-foreground">Final Summary</p>
 

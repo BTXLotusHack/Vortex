@@ -56,6 +56,7 @@ function splitSuggestionDetails(suggestions: string[]) {
 
 export default function Results() {
   const { attempts, pipelineRuns, getTotalScore, getLatestAttempt } = useInterviewStore();
+  const showFinalSummary = false;
   const [selectedAttempt, setSelectedAttempt] = useState<AttemptResult | null>(null);
   const [filter, setFilter] = useState<ModuleType | "all">("all");
   const total = getTotalScore();
@@ -160,7 +161,7 @@ export default function Results() {
               </div>
             </div>
 
-            {false && pipelineComplete && (
+            {showFinalSummary && pipelineComplete && (
               <div
                 className="surface-glass mb-6 rounded-[2rem] border border-luxe p-6 opacity-0 animate-fade-up"
                 style={{ animationDelay: "150ms", animationFillMode: "forwards" }}
