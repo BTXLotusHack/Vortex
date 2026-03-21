@@ -1,11 +1,16 @@
 import { create } from "zustand";
 import {
   ApiError,
+  changePassword as changePasswordRequest,
+  deleteAccount as deleteAccountRequest,
+  forgotPassword as forgotPasswordRequest,
   getCurrentUser,
   login as loginRequest,
   logout as logoutRequest,
   resendSignupOtp as resendSignupOtpRequest,
+  resetPassword as resetPasswordRequest,
   signup as signupRequest,
+  updateProfile as updateProfileRequest,
   verifySignupOtp as verifySignupOtpRequest,
   type AuthUser as User,
 } from "@/lib/api";
@@ -35,6 +40,14 @@ interface AuthState {
   signup: (payload: SignupPayload) => Promise<SignupPendingState>;
   verifySignupOtp: (payload: { email: string; otp: string }) => Promise<User>;
   resendSignupOtp: (payload: { email: string }) => Promise<SignupPendingState>;
+  forgotPassword: (payload: { email: string }) => Promise<SignupPendingState>;
+  resetPassword: (payload: { email: string; otp: string; password: string }) => Promise<void>;
+  updateProfile: (payload: { name: string; email: string }) => Promise<User>;
+  changePassword: (payload: {
+    currentPassword: string;
+    newPassword: string;
+  }) => Promise<void>;
+  deleteAccount: (payload: { password: string }) => Promise<void>;
   clearPendingSignup: () => void;
   logout: () => Promise<void>;
 }
@@ -130,6 +143,55 @@ export const useAuthStore = create<AuthState>()((set) => ({
       return pendingSignup;
     } catch (error) {
       throw new Error(toFriendlyMessage(error, "Unable to resend OTP."));
+    }
+  },
+
+  forgotPassword: async (payload) => {
+    try {
+      return await forgotPasswordRequest(payload);
+    } catch (error) {
+      throw new Error(
+        toFriendlyMessage(error, "Unable to send the password reset code."),
+      );
+    }
+  },
+
+  resetPassword: async (payload) => {
+    try {
+      await resetPasswordRequest(payload);
+    } catch (error) {
+      throw new Error(toFriendlyMessage(error, "Unable to reset password."));
+    }
+  },
+
+  updateProfile: async (payload) => {
+    try {
+      const { user } = await updateProfileRequest(payload);
+      if (!user) {
+        throw new Error("Unable to update profile.");
+      }
+
+      set({ user });
+      return user;
+    } catch (error) {
+      throw new Error(toFriendlyMessage(error, "Unable to update profile."));
+    }
+  },
+
+  changePassword: async (payload) => {
+    try {
+      await changePasswordRequest(payload);
+    } catch (error) {
+      throw new Error(toFriendlyMessage(error, "Unable to change password."));
+    }
+  },
+
+  deleteAccount: async (payload) => {
+    try {
+      await deleteAccountRequest(payload);
+      set({ user: null, pendingSignup: null });
+    } catch (error) {
+      throw new Error(toFriendlyMessage(error, "Unable to delete account."));
     }
   },
 

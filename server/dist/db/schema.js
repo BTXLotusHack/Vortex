@@ -34,6 +34,29 @@ export async function initializeSchema() {
   `);
     await query("CREATE UNIQUE INDEX IF NOT EXISTS idx_signup_verifications_email_lower ON signup_verifications (LOWER(email));");
     await query(`
+    CREATE TABLE IF NOT EXISTS password_reset_verifications (
+      email TEXT PRIMARY KEY,
+      otp_hash TEXT NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+    await query("CREATE UNIQUE INDEX IF NOT EXISTS idx_password_reset_verifications_email_lower ON password_reset_verifications (LOWER(email));");
+    await query(`
+    CREATE TABLE IF NOT EXISTS profiles (
+      user_id UUID PRIMARY KEY,
+      full_name TEXT,
+      contact_email TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+    await query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_profiles_contact_email_lower
+    ON profiles (LOWER(contact_email))
+    WHERE contact_email IS NOT NULL;
+  `);
+    await query(`
     CREATE TABLE IF NOT EXISTS sessions (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

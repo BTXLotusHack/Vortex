@@ -17,6 +17,10 @@ type SignupOtpResponse = {
   message: string;
 };
 
+type SuccessResponse = {
+  success: boolean;
+};
+
 type ApiErrorPayload = {
   error?: string;
   message?: string;
@@ -784,4 +788,61 @@ export async function getCurrentUser() {
   });
 
   return parseApiResponse<AuthResponse>(response);
+}
+
+export async function forgotPassword(payload: { email: string }) {
+  const response = await apiFetch("/api/auth/forgot-password", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  return parseApiResponse<SignupOtpResponse>(response);
+}
+
+export async function resetPassword(payload: {
+  email: string;
+  otp: string;
+  password: string;
+}) {
+  const response = await apiFetch("/api/auth/reset-password", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  return parseApiResponse<SuccessResponse>(response);
+}
+
+export async function updateProfile(payload: { name: string; email: string }) {
+  const response = await apiFetch("/api/auth/profile", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  return parseApiResponse<AuthResponse>(response);
+}
+
+export async function changePassword(payload: {
+  currentPassword: string;
+  newPassword: string;
+}) {
+  const response = await apiFetch("/api/auth/change-password", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  return parseApiResponse<SuccessResponse>(response);
+}
+
+export async function deleteAccount(payload: { password: string }) {
+  const response = await apiFetch("/api/auth/account", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  return parseApiResponse<SuccessResponse>(response);
 }
