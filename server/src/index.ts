@@ -6,6 +6,7 @@ import { cvRouter } from "./routes/cv.js";
 import { interviewRouter } from "./routes/interview.js";
 import { voiceRouter } from "./routes/voice.js";
 import { dataRouter } from "./routes/data.js";
+import { query } from "./db/pool.js";
 import { initializeSchema } from "./db/schema.js";
 
 const app = express();
@@ -28,6 +29,32 @@ function getAllowedClientOrigins() {
 }
 
 const allowedClientOrigins = new Set(getAllowedClientOrigins());
+
+function classifyDatabaseError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  const normalized = message.toLowerCase();
+
+  if (normalized.includes("missing database url")) {
+    return "missing_config";
+  }
+
+  if (normalized.includes("does not exist")) {
+    return "schema_missing";
+  }
+
+  if (
+    normalized.includes("connect") ||
+    normalized.includes("timeout") ||
+    normalized.includes("enotfound") ||
+    normalized.includes("econn") ||
+    normalized.includes("certificate") ||
+    normalized.includes("ssl")
+  ) {
+    return "connection_failed";
+  }
+
+  return "query_failed";
+}
 
 // Middleware
 app.use(cors({
@@ -52,8 +79,47 @@ app.use("/api/voice", voiceRouter);
 app.use("/api/data", dataRouter);
 
 // Health check
-app.get("/api/health", (_req, res) => {
-  res.json({ status: "ok", timestamp: new Date().toISOString() });
+app.get("/api/health", async (_req, res) => {
+  const payload: {
+    status: "ok" | "degraded";
+    timestamp: string;
+    checks: Record<string, unknown>;
+  } = {
+    status: "ok",
+    timestamp: new Date().toISOString(),
+    checks: {
+      app: "ok",
+    },
+  };
+
+  try {
+    await query("SELECT 1;");
+    payload.checks.database = "ok";
+
+    const tableCheck = await query<{
+      users: string | null;
+      signup_verifications: string | null;
+      password_reset_verifications: string | null;
+    }>(`
+      SELECT
+        to_regclass('public.users') AS users,
+        to_regclass('public.signup_verifications') AS signup_verifications,
+        to_regclass('public.password_reset_verifications') AS password_reset_verifications;
+    `);
+
+    const tables = tableCheck.rows[0];
+    payload.checks.authTables = {
+      users: Boolean(tables?.users),
+      signup_verifications: Boolean(tables?.signup_verifications),
+      password_reset_verifications: Boolean(tables?.password_reset_verifications),
+    };
+  } catch (error) {
+    payload.status = "degraded";
+    payload.checks.database = classifyDatabaseError(error);
+  }
+
+  const statusCode = payload.status === "ok" ? 200 : 503;
+  res.status(statusCode).json(payload);
 });
 
 app.listen(PORT, () => {

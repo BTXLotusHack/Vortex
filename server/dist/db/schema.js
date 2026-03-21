@@ -9,7 +9,6 @@ export async function initializeSchema() {
         const message = error instanceof Error ? error.message : String(error);
         console.warn("Vector extension unavailable. RAG document storage is disabled:", message);
     }
-    await query("CREATE EXTENSION IF NOT EXISTS pgcrypto;");
     await query(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
@@ -58,7 +57,7 @@ export async function initializeSchema() {
   `);
     await query(`
     CREATE TABLE IF NOT EXISTS sessions (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      id UUID PRIMARY KEY,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       job_url TEXT,
       tech_stack TEXT[] NOT NULL DEFAULT '{}',
@@ -69,7 +68,7 @@ export async function initializeSchema() {
   `);
     await query(`
     CREATE TABLE IF NOT EXISTS scores (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      id UUID PRIMARY KEY,
       session_id UUID NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       overall_score INTEGER NOT NULL,
@@ -81,7 +80,7 @@ export async function initializeSchema() {
     if (hasVectorExtension) {
         await query(`
       CREATE TABLE IF NOT EXISTS rag_documents (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        id UUID PRIMARY KEY,
         user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         session_id UUID REFERENCES sessions(id) ON DELETE CASCADE,
         source_type TEXT NOT NULL,
