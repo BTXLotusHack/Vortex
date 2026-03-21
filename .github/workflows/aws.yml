@@ -134,5 +134,20 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
+      - name: Wait for App Runner service to be ready
+        env:
+          SERVICE_ARN: ${{ vars.APP_RUNNER_SERVICE_ARN }}
+        run: |
+          for i in {1..30}; do
+            STATUS=$(aws apprunner describe-service --service-arn "$SERVICE_ARN" --query 'Service.Status' --output text)
+            echo "Current App Runner status: $STATUS"
+            if [ "$STATUS" = "RUNNING" ]; then
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "App Runner service did not return to RUNNING state in time."
+          exit 1
+
       - name: Start App Runner deployment
         run: aws apprunner start-deployment --service-arn ${{ vars.APP_RUNNER_SERVICE_ARN }}
