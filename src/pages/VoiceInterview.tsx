@@ -29,7 +29,7 @@ export default function VoiceInterview() {
   const [searchParams] = useSearchParams();
   const fromPipeline = searchParams.get("from") === "pipeline";
 
-  const [status, setStatus] = useState<Status>("Disconnected");
+  const [status, setStatus] = useState<Status>("disconnected");
   const [mode, setMode] = useState<Mode>("listening");
   const [messages, setMessages] = useState<TranscriptMessage[]>([]);
   const [conversationId, setConversationId] = useState("");

@@ -3,6 +3,25 @@ import multer from "multer";
 import { optionalAuth } from "../middleware/auth.js";
 import { ChatOpenAI } from "@langchain/openai";
 export const cvRouter = Router();
+function clampScore(value, min, max) {
+    return Math.min(max, Math.max(min, Math.round(Number(value || 0))));
+}
+function normalizeScore(value) {
+    return clampScore(value, 0, 100);
+}
+function normalizeJobFitVerdict(score) {
+    if (score >= 75)
+        return "strong-fit";
+    if (score >= 45)
+        return "partial-fit";
+    return "weak-fit";
+}
+function computeOverallCvScore(input) {
+    if (!input.hasMeaningfulJobDescription) {
+        return input.genericQualityScore;
+    }
+    return clampScore(input.genericQualityScore * 0.35 + input.jobFitScore * 0.65, 0, 100);
+}
 function readContentAsText(content) {
     if (typeof content === "string")
         return content;
@@ -69,6 +88,7 @@ cvRouter.post("/analyze", optionalAuth, upload.single("cv"), async (req, res) =>
         const file = req.file;
         const role = req.body?.jobRole || "General";
         const jobDescription = req.body?.jobDescription || "";
+        const hasMeaningfulJobDescription = jobDescription.trim().length >= 80;
         if (!file) {
             return res.status(400).json({ error: "No file uploaded" });
         }
@@ -93,7 +113,22 @@ cvRouter.post("/analyze", optionalAuth, upload.single("cv"), async (req, res) =>
             const response = await llm.invoke([
                 {
                     role: "system",
-                    content: "You are an expert CV reviewer and hiring coach. Return only JSON.",
+                    content: `You are an expert CV reviewer and hiring coach. Return only JSON.
+
+You must score the CV on two explicitly separate axes:
+1. genericQualityScore (35% weight): the CV's standalone quality independent of this specific JD.
+2. jobFitScore (65% weight): how well the CV matches the specific JD.
+
+Scoring definitions:
+- genericQualityScore: structure, clarity, quantified impact, professionalism, evidence quality, readability, and general ATS hygiene. This score should still make sense even if the JD were removed.
+- jobFitScore: alignment to the specific JD's core requirements, must-have skills, seniority, domain, tools, responsibilities, and evidence of directly relevant achievements.
+
+Important:
+- Do not let a polished but irrelevant CV score highly overall.
+- If the JD is meaningful, jobFitScore must dominate the final recommendation.
+- If the JD is broad or messy, infer the 5-8 core must-have requirements first, then judge fit against those must-haves.
+- Missing several core JD requirements should materially reduce jobFitScore.
+- Keep the scoring deterministic and strict.`,
                 },
                 {
                     role: "user",
@@ -102,6 +137,8 @@ CV text:\n${text.slice(0, 7000)}
 
 Return strict JSON:
 {
+  "genericQualityScore": number,
+  "jobFitScore": number,
   "overallScore": number,
   "feedback": [
     {
@@ -133,7 +170,13 @@ Rules:
 - Use all 4 categories once each.
 - Keep suggestions concrete and tailored to this role.
 - Keep the scoring deterministic and stable for the same CV + role + job description.
-- Use a strict rubric: each category must be scored from 0 to 25 and the overall score should equal the sum of the 4 category scores.
+- Each feedback category must be scored from 0 to 25.
+- genericQualityScore must be 0-100 and must measure only generic CV quality.
+- jobFitScore must be 0-100 and must measure only JD fit.
+- If a meaningful JD is provided, overallScore should reflect this formula:
+  overallScore = round(genericQualityScore * 0.35 + jobFitScore * 0.65)
+- If no meaningful JD is provided, overallScore should stay close to genericQualityScore.
+- Treat JD matching as the dominant decision axis whenever a meaningful JD is present.
 
 Relevant job description:
 ${jobDescription.slice(0, 5000) || "Not provided"}`,
@@ -143,9 +186,23 @@ ${jobDescription.slice(0, 5000) || "Not provided"}`,
             if (parsed) {
                 const normalizedFeedback = normalizeCvFeedback(parsed.feedback);
                 if (normalizedFeedback.length === 4) {
-                    const computedOverallScore = normalizedFeedback.reduce((sum, item) => sum + item.score, 0);
+                    const genericQualityScore = normalizeScore(parsed.genericQualityScore);
+                    const jobFitScore = normalizeScore(parsed.jobFitScore ?? parsed.candidateProfile?.jobFitScore);
+                    const computedOverallScore = computeOverallCvScore({
+                        genericQualityScore,
+                        jobFitScore,
+                        hasMeaningfulJobDescription,
+                    });
                     return res.json({
-                        overallScore: Math.min(100, Math.max(0, computedOverallScore)),
+                        genericQualityScore,
+                        jobFitScore,
+                        overallScore: computedOverallScore,
+                        scoreBreakdown: {
+                            genericQualityScore,
+                            jobFitScore,
+                            genericQualityWeight: hasMeaningfulJobDescription ? 35 : 100,
+                            jobFitWeight: hasMeaningfulJobDescription ? 65 : 0,
+                        },
                         feedback: normalizedFeedback,
                         insights: {
                             strengths: parsed.insights?.strengths || [],
@@ -158,8 +215,8 @@ ${jobDescription.slice(0, 5000) || "Not provided"}`,
                             risks: parsed.candidateProfile?.risks || [],
                             likelySkills: parsed.candidateProfile?.likelySkills || [],
                             seniority: parsed.candidateProfile?.seniority || "Unknown",
-                            jobFitScore: Number(parsed.candidateProfile?.jobFitScore || 0),
-                            jobFitVerdict: parsed.candidateProfile?.jobFitVerdict || "partial-fit",
+                            jobFitScore,
+                            jobFitVerdict: normalizeJobFitVerdict(jobFitScore),
                             jobFitSummary: parsed.candidateProfile?.jobFitSummary || "",
                         },
                     });
@@ -167,8 +224,23 @@ ${jobDescription.slice(0, 5000) || "Not provided"}`,
             }
         }
         // Fallback: mock analysis
+        const genericQualityScore = 73;
+        const jobFitScore = hasMeaningfulJobDescription ? 61 : 73;
+        const overallScore = computeOverallCvScore({
+            genericQualityScore,
+            jobFitScore,
+            hasMeaningfulJobDescription,
+        });
         return res.json({
-            overallScore: 72,
+            genericQualityScore,
+            jobFitScore,
+            overallScore,
+            scoreBreakdown: {
+                genericQualityScore,
+                jobFitScore,
+                genericQualityWeight: hasMeaningfulJobDescription ? 35 : 100,
+                jobFitWeight: hasMeaningfulJobDescription ? 65 : 0,
+            },
             feedback: [
                 {
                     category: "Formatting & Structure",
@@ -230,8 +302,8 @@ ${jobDescription.slice(0, 5000) || "Not provided"}`,
                 risks: ["Weak quantification of outcomes", "Generic positioning against the target JD"],
                 likelySkills: ["Frontend development", "Cross-functional delivery", "UI implementation", "Team collaboration"],
                 seniority: "Mid-level",
-                jobFitScore: 72,
-                jobFitVerdict: "partial-fit",
+                jobFitScore,
+                jobFitVerdict: normalizeJobFitVerdict(jobFitScore),
                 jobFitSummary: "The profile appears relevant to the role, but there are still some gaps between the CV evidence and the JD expectations, especially around quantified impact and direct alignment to requirements.",
             },
         });
