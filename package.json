@@ -8,10 +8,22 @@
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
     "preview": "vite preview",
     "test": "vitest run",
+    "test:repo": "vitest run src/test",
     "test:watch": "vitest",
     "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,jsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,css,md,html,yml,yaml}": [
+      "prettier --write"
+    ]
   },
   "dependencies": {
     "@elevenlabs/client": "^0.15.2",

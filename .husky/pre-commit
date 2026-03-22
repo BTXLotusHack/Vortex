@@ -1,0 +1,8 @@
+#!/usr/bin/env sh
+# . "$(dirname "$0")/_/h"
+
+# echo "Running lint-staged auto-fixes..."
+# node ./node_modules/lint-staged/bin/lint-staged.js || exit 1
+
+# echo "Running repository test suite..."
+# node ./node_modules/vitest/vitest.mjs run src/test || exit 1
