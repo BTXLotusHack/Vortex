@@ -30,10 +30,10 @@ export default function Dashboard() {
   } as const;
 
   const moduleInsightRows = (["cv-screening", "voice-interview", "technical-interview"] as const)
-    .map((mod) => {
+    .flatMap((mod) => {
       const attempts = getModuleAttempts(mod);
       const latest = attempts[0];
-      if (!latest) return null;
+      if (!latest) return [];
 
       const previous = attempts[1];
       const improvement = getImprovement(mod);
@@ -55,7 +55,7 @@ export default function Dashboard() {
       const previousRatio = previous?.maxScore ? previous.overallScore / previous.maxScore : null;
       const delta = previousRatio === null ? null : Math.round((latestRatio - previousRatio) * 100);
 
-      return {
+      return [{
         mod,
         label,
         key,
@@ -67,9 +67,8 @@ export default function Dashboard() {
         weakestAreas,
         nextActions,
         delta,
-      };
-    })
-    .filter(Boolean);
+      }];
+    });
 
   const progressChartConfig = {
     cv: { label: "CV", color: moduleMeta["cv-screening"].color },

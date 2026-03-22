@@ -2,11 +2,10 @@ import "../env.js";
 import type { Request, Response } from "express";
 import type { AuthUser } from "../middleware/auth.js";
 export declare const AUTH_COOKIE_NAME: string;
-type SameSiteMode = "strict" | "lax" | "none";
 export declare function getAuthCookieOptions(): {
     httpOnly: boolean;
     secure: boolean;
-    sameSite: SameSiteMode;
+    sameSite: "strict" | "lax" | "none";
     maxAge: number;
     domain: string | undefined;
     path: string;
@@ -21,5 +20,4 @@ export declare function verifyAuthToken(token: string): {
 export declare function readAuthTokenFromRequest(req: Request): string | null;
 export declare function setAuthCookie(res: Response, token: string): void;
 export declare function clearAuthCookie(res: Response): void;
-export {};
 //# sourceMappingURL=auth.d.ts.map
