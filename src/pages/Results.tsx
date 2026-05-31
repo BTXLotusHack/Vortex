@@ -1,4 +1,5 @@
 import { AppLayout } from "@/components/layout/AppLayout";
+import { ExportResults } from "@/components/ExportResults";
 import { ScoreRing } from "@/components/ScoreRing";
 import { FeedbackPanel } from "@/components/FeedbackPanel";
 import {
@@ -122,10 +123,15 @@ export default function Results() {
           className="surface-hero mb-8 rounded-[2.25rem] border border-luxe px-6 py-7 opacity-0 animate-fade-up md:px-8"
           style={{ animationFillMode: "forwards" }}
         >
-          <h1 className="font-display text-4xl md:text-5xl">Results & History</h1>
-          <p className="mt-3 max-w-2xl text-sm leading-7 text-muted-foreground">
-            Review your past attempts and track improvement across modules.
-          </p>
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <h1 className="font-display text-4xl md:text-5xl">Results & History</h1>
+              <p className="mt-3 max-w-2xl text-sm leading-7 text-muted-foreground">
+                Review your past attempts and track improvement across modules.
+              </p>
+            </div>
+            <ExportResults />
+          </div>
         </div>
 
         {attempts.length === 0 ? (
