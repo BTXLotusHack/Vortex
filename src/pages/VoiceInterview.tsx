@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Conversation, type Mode, type Status } from "@elevenlabs/client";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { PrepTips } from "@/components/PrepTips";
 import { useInterviewStore } from "@/stores/interviewStore";
 import { apiUrl, evaluateVoiceTranscript } from "@/lib/api";
 import {
@@ -354,6 +355,9 @@ export default function VoiceInterview() {
           </div>
         ) : (
           <>
+            <div className="mb-4 opacity-0 animate-fade-up" style={{ animationFillMode: "forwards" }}>
+              <PrepTips module="voice-interview" />
+            </div>
             <div
               className="surface-hero noise-overlay relative mb-8 overflow-hidden rounded-[2.5rem] border border-luxe px-6 py-8 opacity-0 animate-fade-up md:px-10 md:py-10"
               style={{ animationFillMode: "forwards" }}

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ScoreRing } from "@/components/ScoreRing";
 import { FeedbackPanel } from "@/components/FeedbackPanel";
+import { PrepTips } from "@/components/PrepTips";
 import { useInterviewStore, type FeedbackItem } from "@/stores/interviewStore";
 import { getInterviewQuestions, evaluateAnswer } from "@/lib/api";
 import {
@@ -320,6 +321,10 @@ export default function TechnicalInterview() {
                 . {candidateProfile.jobFitSummary}
               </div>
             )}
+
+            <div className="mb-6">
+              <PrepTips module="technical-interview" />
+            </div>
 
             <div className="space-y-4">
               <div>

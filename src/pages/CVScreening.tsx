@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { FeedbackPanel } from "@/components/FeedbackPanel";
+import { PrepTips } from "@/components/PrepTips";
 import { ScoreRing } from "@/components/ScoreRing";
 import { useInterviewStore } from "@/stores/interviewStore";
 import { analyzeCV, analyzeUploadedCV, requestCVUploadUrl, uploadCVToPresignedUrl } from "@/lib/api";
@@ -157,6 +158,9 @@ export default function CVScreening() {
             className="opacity-0 animate-fade-up"
             style={{ animationDelay: "100ms", animationFillMode: "forwards" }}
           >
+            <div className="mb-4">
+              <PrepTips module="cv-screening" />
+            </div>
             <div className="mb-6 space-y-4 rounded-lg border bg-card p-5">
               <div>
                 <label className="mb-1.5 block text-sm font-medium">Target Role</label>
