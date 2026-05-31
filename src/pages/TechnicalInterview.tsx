@@ -31,6 +31,7 @@ export default function TechnicalInterview() {
   const [questionCount, setQuestionCount] = useState(5);
   const [questionBrief, setQuestionBrief] = useState("");
   const [difficulty, setDifficulty] = useState<"mixed" | "easy" | "medium" | "hard">("mixed");
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [userAnswer, setUserAnswer] = useState("");
   const [codeAnswer, setCodeAnswer] = useState(
@@ -101,6 +102,7 @@ export default function TechnicalInterview() {
         {
           questionBrief: questionBrief.trim() || generatedBrief || undefined,
           difficulty,
+          categories: selectedCategories.length ? selectedCategories : undefined,
         },
       );
       if (!qs.length) {
@@ -359,6 +361,50 @@ export default function TechnicalInterview() {
                   {difficulty === "easy" && "Foundational questions to build confidence."}
                   {difficulty === "medium" && "Standard interview-level questions."}
                   {difficulty === "hard" && "Advanced questions for senior-level preparation."}
+                </p>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">
+                  Question Categories
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    "Algorithms & Data Structures",
+                    "System Design",
+                    "Web Fundamentals",
+                    "React & Frontend",
+                    "Node.js & Backend",
+                    "Databases & SQL",
+                    "DevOps & Cloud",
+                    "Security",
+                  ].map((cat) => {
+                    const active = selectedCategories.includes(cat);
+                    return (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() =>
+                          setSelectedCategories((prev) =>
+                            active ? prev.filter((c) => c !== cat) : [...prev, cat],
+                          )
+                        }
+                        className={cn(
+                          "rounded-full border px-3 py-1.5 text-xs font-medium transition-all",
+                          active
+                            ? "border-primary bg-primary/10 text-primary"
+                            : "border-border bg-card text-muted-foreground hover:bg-secondary",
+                        )}
+                      >
+                        {cat}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {selectedCategories.length === 0
+                    ? "Leave empty for a balanced mix of all topics."
+                    : `${selectedCategories.length} categor${selectedCategories.length === 1 ? "y" : "ies"} selected.`}
                 </p>
               </div>
 
