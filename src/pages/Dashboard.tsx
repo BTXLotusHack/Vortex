@@ -1,6 +1,7 @@
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ModuleCard } from "@/components/ModuleCard";
 import { ReadinessAssessment } from "@/components/ReadinessAssessment";
+import { StreakTracker } from "@/components/StreakTracker";
 import {
   ChartContainer,
   ChartLegend,
@@ -210,6 +211,9 @@ export default function Dashboard() {
             style={{ animationDelay: "420ms", animationFillMode: "forwards" }}
           >
             <ReadinessAssessment />
+            <div className="mt-4">
+              <StreakTracker />
+            </div>
           </div>
         )}
 
