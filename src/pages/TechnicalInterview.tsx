@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ScoreRing } from "@/components/ScoreRing";
 import { FeedbackPanel } from "@/components/FeedbackPanel";
+import { PrepTips } from "@/components/PrepTips";
 import { useInterviewStore, type FeedbackItem } from "@/stores/interviewStore";
 import { getInterviewQuestions, evaluateAnswer } from "@/lib/api";
 import {
@@ -30,6 +31,8 @@ export default function TechnicalInterview() {
   const [currentQ, setCurrentQ] = useState(0);
   const [questionCount, setQuestionCount] = useState(5);
   const [questionBrief, setQuestionBrief] = useState("");
+  const [difficulty, setDifficulty] = useState<"mixed" | "easy" | "medium" | "hard">("mixed");
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [userAnswer, setUserAnswer] = useState("");
   const [codeAnswer, setCodeAnswer] = useState(
@@ -43,9 +46,13 @@ export default function TechnicalInterview() {
   >([]);
   const [evaluating, setEvaluating] = useState(false);
   const [timer, setTimer] = useState(0);
-  const [timerInterval, setTimerInterval] = useState<ReturnType<
-    typeof setInterval
-  > | null>(null);
+  const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+    };
+  }, []);
 
   const fromPipeline = searchParams.get("from") === "pipeline";
   const {
@@ -95,6 +102,8 @@ export default function TechnicalInterview() {
         questionCount,
         {
           questionBrief: questionBrief.trim() || generatedBrief || undefined,
+          difficulty,
+          categories: selectedCategories.length ? selectedCategories : undefined,
         },
       );
       if (!qs.length) {
@@ -109,7 +118,7 @@ export default function TechnicalInterview() {
       setTimer(0);
       setStage("interview");
       const interval = setInterval(() => setTimer((t) => t + 1), 1000);
-      setTimerInterval(interval);
+      timerIntervalRef.current = interval;
     } catch (error) {
       const message =
         error instanceof Error
@@ -163,7 +172,10 @@ export default function TechnicalInterview() {
       if (currentQ < questions.length - 1) {
         setCurrentQ(currentQ + 1);
       } else {
-        if (timerInterval) clearInterval(timerInterval);
+        if (timerIntervalRef.current) {
+          clearInterval(timerIntervalRef.current);
+          timerIntervalRef.current = null;
+        }
         const totalScore = newAnswers.reduce(
           (s, a) => s + a.evaluation.score,
           0,
@@ -310,6 +322,10 @@ export default function TechnicalInterview() {
               </div>
             )}
 
+            <div className="mb-6">
+              <PrepTips module="technical-interview" />
+            </div>
+
             <div className="space-y-4">
               <div>
                 <label className="text-sm font-medium mb-1.5 block">
@@ -322,6 +338,79 @@ export default function TechnicalInterview() {
                   className="w-full rounded-lg border bg-card px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                   placeholder="e.g. Frontend Developer"
                 />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">
+                  Difficulty Level
+                </label>
+                <div className="grid grid-cols-4 gap-2">
+                  {(["mixed", "easy", "medium", "hard"] as const).map((level) => (
+                    <button
+                      key={level}
+                      type="button"
+                      onClick={() => setDifficulty(level)}
+                      className={cn(
+                        "rounded-lg border px-3 py-2 text-sm font-medium transition-all capitalize",
+                        difficulty === level
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-border bg-card text-muted-foreground hover:bg-secondary",
+                      )}
+                    >
+                      {level}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {difficulty === "mixed" && "A balanced mix of easy, medium, and hard questions."}
+                  {difficulty === "easy" && "Foundational questions to build confidence."}
+                  {difficulty === "medium" && "Standard interview-level questions."}
+                  {difficulty === "hard" && "Advanced questions for senior-level preparation."}
+                </p>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">
+                  Question Categories
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    "Algorithms & Data Structures",
+                    "System Design",
+                    "Web Fundamentals",
+                    "React & Frontend",
+                    "Node.js & Backend",
+                    "Databases & SQL",
+                    "DevOps & Cloud",
+                    "Security",
+                  ].map((cat) => {
+                    const active = selectedCategories.includes(cat);
+                    return (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() =>
+                          setSelectedCategories((prev) =>
+                            active ? prev.filter((c) => c !== cat) : [...prev, cat],
+                          )
+                        }
+                        className={cn(
+                          "rounded-full border px-3 py-1.5 text-xs font-medium transition-all",
+                          active
+                            ? "border-primary bg-primary/10 text-primary"
+                            : "border-border bg-card text-muted-foreground hover:bg-secondary",
+                        )}
+                      >
+                        {cat}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {selectedCategories.length === 0
+                    ? "Leave empty for a balanced mix of all topics."
+                    : `${selectedCategories.length} categor${selectedCategories.length === 1 ? "y" : "ies"} selected.`}
+                </p>
               </div>
 
               <div>

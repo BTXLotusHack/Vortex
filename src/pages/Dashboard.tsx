@@ -1,5 +1,7 @@
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ModuleCard } from "@/components/ModuleCard";
+import { ReadinessAssessment } from "@/components/ReadinessAssessment";
+import { StreakTracker } from "@/components/StreakTracker";
 import {
   ChartContainer,
   ChartLegend,
@@ -202,6 +204,18 @@ export default function Dashboard() {
             disabledReason="Analyze the CV against the JD first to unlock technical interview access."
           />
         </div>
+
+        {hasAnyAttempt && (
+          <div
+            className="mt-8 opacity-0 animate-fade-up"
+            style={{ animationDelay: "420ms", animationFillMode: "forwards" }}
+          >
+            <ReadinessAssessment />
+            <div className="mt-4">
+              <StreakTracker />
+            </div>
+          </div>
+        )}
 
         {hasAnyAttempt && (
           <div

@@ -36,7 +36,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    await logout();
+    try {
+      await logout();
+    } catch {
+      // User state is already cleared by the store's finally block.
+    }
     navigate("/");
   };
 

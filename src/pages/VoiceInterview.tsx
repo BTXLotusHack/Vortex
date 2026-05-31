@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Conversation, type Mode, type Status } from "@elevenlabs/client";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { PrepTips } from "@/components/PrepTips";
 import { useInterviewStore } from "@/stores/interviewStore";
 import { apiUrl, evaluateVoiceTranscript } from "@/lib/api";
 import {
@@ -97,14 +98,20 @@ export default function VoiceInterview() {
 
         if (!response.ok) continue;
 
+        const text = await response.text();
+        if (!text) continue;
+
         const contentType = response.headers.get("content-type") || "";
         if (contentType.includes("application/json")) {
-          const data = await response.json().catch(() => null);
-          if (typeof data?.token === "string") return data.token;
+          try {
+            const data = JSON.parse(text);
+            if (typeof data?.token === "string") return data.token;
+          } catch {
+            // not valid JSON, fall through to return raw text
+          }
         }
 
-        const text = await response.text();
-        if (text) return text;
+        return text;
       } catch {
         continue;
       }
@@ -348,6 +355,9 @@ export default function VoiceInterview() {
           </div>
         ) : (
           <>
+            <div className="mb-4 opacity-0 animate-fade-up" style={{ animationFillMode: "forwards" }}>
+              <PrepTips module="voice-interview" />
+            </div>
             <div
               className="surface-hero noise-overlay relative mb-8 overflow-hidden rounded-[2.5rem] border border-luxe px-6 py-8 opacity-0 animate-fade-up md:px-10 md:py-10"
               style={{ animationFillMode: "forwards" }}

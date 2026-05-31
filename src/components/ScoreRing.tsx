@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import { useId, type CSSProperties } from "react";
 import { cn } from "@/lib/utils";
 
 interface ScoreRingProps {
@@ -36,7 +36,8 @@ export function ScoreRing({
   const circumference = 2 * Math.PI * radius;
   const pct = maxScore > 0 ? score / maxScore : 0;
   const offset = circumference * (1 - pct);
-  const gradientId = `score-gradient-${size}-${Math.round(pct * 100)}`;
+  const instanceId = useId();
+  const gradientId = `score-gradient-${instanceId}`;
 
   return (
     <div className={cn("flex flex-col items-center gap-2", className)}>
