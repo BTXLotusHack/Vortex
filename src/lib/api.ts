@@ -441,6 +441,8 @@ export async function getInterviewQuestions(
   count = 5,
   options?: {
     questionBrief?: string;
+    difficulty?: "mixed" | "easy" | "medium" | "hard";
+    categories?: string[];
   },
 ): Promise<InterviewQuestionPayload[]> {
   try {
@@ -455,6 +457,8 @@ export async function getInterviewQuestions(
         type,
         count,
         questionBrief: options?.questionBrief,
+        difficulty: options?.difficulty,
+        categories: options?.categories,
       }),
     });
 

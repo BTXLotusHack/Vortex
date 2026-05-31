@@ -30,6 +30,7 @@ export default function TechnicalInterview() {
   const [currentQ, setCurrentQ] = useState(0);
   const [questionCount, setQuestionCount] = useState(5);
   const [questionBrief, setQuestionBrief] = useState("");
+  const [difficulty, setDifficulty] = useState<"mixed" | "easy" | "medium" | "hard">("mixed");
   const [loading, setLoading] = useState(false);
   const [userAnswer, setUserAnswer] = useState("");
   const [codeAnswer, setCodeAnswer] = useState(
@@ -99,6 +100,7 @@ export default function TechnicalInterview() {
         questionCount,
         {
           questionBrief: questionBrief.trim() || generatedBrief || undefined,
+          difficulty,
         },
       );
       if (!qs.length) {
@@ -329,6 +331,35 @@ export default function TechnicalInterview() {
                   className="w-full rounded-lg border bg-card px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                   placeholder="e.g. Frontend Developer"
                 />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">
+                  Difficulty Level
+                </label>
+                <div className="grid grid-cols-4 gap-2">
+                  {(["mixed", "easy", "medium", "hard"] as const).map((level) => (
+                    <button
+                      key={level}
+                      type="button"
+                      onClick={() => setDifficulty(level)}
+                      className={cn(
+                        "rounded-lg border px-3 py-2 text-sm font-medium transition-all capitalize",
+                        difficulty === level
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-border bg-card text-muted-foreground hover:bg-secondary",
+                      )}
+                    >
+                      {level}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {difficulty === "mixed" && "A balanced mix of easy, medium, and hard questions."}
+                  {difficulty === "easy" && "Foundational questions to build confidence."}
+                  {difficulty === "medium" && "Standard interview-level questions."}
+                  {difficulty === "hard" && "Advanced questions for senior-level preparation."}
+                </p>
               </div>
 
               <div>

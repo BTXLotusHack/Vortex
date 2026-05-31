@@ -153,6 +153,8 @@ async function generateQuestionsWithAI(
   type: InterviewType,
   count: number,
   questionBrief?: string,
+  difficulty?: string,
+  categories?: string[],
 ): Promise<InterviewQuestion[]> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
@@ -166,9 +168,16 @@ async function generateQuestionsWithAI(
   const llm = new ChatOpenAI({ apiKey, model, temperature: 0.9 });
   const nonce = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
+  const difficultyInstruction = difficulty && difficulty !== "mixed"
+    ? `\nDifficulty constraint: ALL questions must be "${difficulty}" difficulty.`
+    : "\nDifficulty constraint: Use a balanced mix of easy, medium, and hard.";
+  const categoryInstruction = categories?.length
+    ? `\nCategory focus: Questions should cover these topics: ${categories.join(", ")}.`
+    : "";
+
   const prompt = `Create ${count} unique ${type} interview questions for role "${role}".
 Randomization seed: ${nonce}
-Custom candidate requirements: ${questionBrief || "None"}
+Custom candidate requirements: ${questionBrief || "None"}${difficultyInstruction}${categoryInstruction}
 
 Return STRICT JSON object with shape:
 {
@@ -354,7 +363,10 @@ async function handleQuestionRequest(
       (req.method === "POST" ? req.body?.questionBrief : req.query.brief) as string | undefined;
     const questionBrief = (questionBriefHeader || questionBriefPayload || "").trim() || undefined;
 
-    const questions = await generateQuestionsWithAI(role, type, count, questionBrief);
+    const difficulty = (req.method === "POST" ? req.body?.difficulty : req.query.difficulty) as string | undefined;
+    const categories = Array.isArray(req.body?.categories) ? req.body.categories as string[] : undefined;
+
+    const questions = await generateQuestionsWithAI(role, type, count, questionBrief, difficulty, categories);
     res.set("Cache-Control", "no-store");
     return res.json(questions);
   } catch (error) {
