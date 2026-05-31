@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ScoreRing } from "@/components/ScoreRing";
 import { FeedbackPanel } from "@/components/FeedbackPanel";
@@ -43,9 +43,13 @@ export default function TechnicalInterview() {
   >([]);
   const [evaluating, setEvaluating] = useState(false);
   const [timer, setTimer] = useState(0);
-  const [timerInterval, setTimerInterval] = useState<ReturnType<
-    typeof setInterval
-  > | null>(null);
+  const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+    };
+  }, []);
 
   const fromPipeline = searchParams.get("from") === "pipeline";
   const {
@@ -109,7 +113,7 @@ export default function TechnicalInterview() {
       setTimer(0);
       setStage("interview");
       const interval = setInterval(() => setTimer((t) => t + 1), 1000);
-      setTimerInterval(interval);
+      timerIntervalRef.current = interval;
     } catch (error) {
       const message =
         error instanceof Error
@@ -163,7 +167,10 @@ export default function TechnicalInterview() {
       if (currentQ < questions.length - 1) {
         setCurrentQ(currentQ + 1);
       } else {
-        if (timerInterval) clearInterval(timerInterval);
+        if (timerIntervalRef.current) {
+          clearInterval(timerIntervalRef.current);
+          timerIntervalRef.current = null;
+        }
         const totalScore = newAnswers.reduce(
           (s, a) => s + a.evaluation.score,
           0,

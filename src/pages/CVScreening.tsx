@@ -31,7 +31,8 @@ export default function CVScreening() {
   } = useInterviewStore();
 
   const handleFile = (f: File) => {
-    if (f.type === "application/pdf" || f.name.endsWith(".pdf") || f.name.endsWith(".docx")) {
+    const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    if (f.type === "application/pdf" || f.type === DOCX_MIME || f.name.endsWith(".pdf") || f.name.endsWith(".docx")) {
       setFile(f);
       setResult(null);
     }

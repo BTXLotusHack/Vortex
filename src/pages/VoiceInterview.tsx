@@ -97,14 +97,20 @@ export default function VoiceInterview() {
 
         if (!response.ok) continue;
 
+        const text = await response.text();
+        if (!text) continue;
+
         const contentType = response.headers.get("content-type") || "";
         if (contentType.includes("application/json")) {
-          const data = await response.json().catch(() => null);
-          if (typeof data?.token === "string") return data.token;
+          try {
+            const data = JSON.parse(text);
+            if (typeof data?.token === "string") return data.token;
+          } catch {
+            // not valid JSON, fall through to return raw text
+          }
         }
 
-        const text = await response.text();
-        if (text) return text;
+        return text;
       } catch {
         continue;
       }
